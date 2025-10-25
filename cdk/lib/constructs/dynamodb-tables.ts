@@ -1,5 +1,10 @@
 import { Construct } from "constructs";
-import { Table, AttributeType, BillingMode, ProjectionType } from "aws-cdk-lib/aws-dynamodb";
+import {
+  Table,
+  AttributeType,
+  BillingMode,
+  ProjectionType,
+} from "aws-cdk-lib/aws-dynamodb";
 import { RemovalPolicy } from "aws-cdk-lib";
 
 export class DynamoDbTables extends Construct {
@@ -42,8 +47,8 @@ export class DynamoDbTables extends Construct {
             removalPolicy: RemovalPolicy.DESTROY, // Use RETAIN for production
         });
 
-        // TODO future: add autoscaling group
-        // TODO: or add grantX to specific lambda functions
+    // TODO future: add autoscaling group
+    // TODO: or add grantX to specific lambda functions
 
         this.runningInstancesTable.addGlobalSecondaryIndex({
             indexName: "StatusCreationTimeIndex",

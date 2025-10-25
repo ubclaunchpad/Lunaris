@@ -1,6 +1,6 @@
-AWSTemplateFormatVersion: '2010-09-09'
+AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
-Description: 'Lunaris API for local testing'
+Description: "Lunaris API for local testing"
 
 Globals:
   Function:
@@ -34,11 +34,36 @@ Resources:
             Path: /streamingLink
             Method: get
 
+  # Lambda functions for UserDeployEC2 Step Function
+  CheckRunningStreamsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: lambda/user-deploy-ec2/
+      Handler: check-running-streams.handler
+      Environment:
+        Variables:
+          RUNNING_STREAMS_TABLE_NAME: "RunningStreamsDev"
+
+  DeployEC2Function:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: lambda/user-deploy-ec2/
+      Handler: deploy-ec2.handler
+
+  UpdateRunningStreamsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: lambda/user-deploy-ec2/
+      Handler: update-running-streams.handler
+      Environment:
+        Variables:
+          RUNNING_STREAMS_TABLE_NAME: "RunningStreamsDev"
+
 Outputs:
   DeployInstanceApiEndpoint:
     Description: "API Gateway endpoint URL for Deploy Instance function"
     Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/deployInstance"
-  
+
   StreamingLinkApiEndpoint:
     Description: "API Gateway endpoint URL for Streaming Link function"
     Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/streamingLink"
