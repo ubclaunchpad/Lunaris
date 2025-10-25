@@ -16,7 +16,7 @@ export class StepFunctions extends Construct {
     super(scope, id);
 
     // Load and process the Step Function definition
-    const definitionPath = path.join(__dirname, "../../stepfunctions/example-workflow/definition.asl.json");
+    const definitionPath = path.join(process.cwd(), "../../stepfunctions/example-workflow/definition.asl.json");
     const definitionTemplate = fs.readFileSync(definitionPath, "utf8");
     
     // Replace placeholders with actual Lambda ARNs

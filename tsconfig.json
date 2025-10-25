@@ -1,12 +1,15 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
     "lib": [
-      "es2022"
+      "ES2022"
     ],
+    "module": "CommonJS",
+    "moduleResolution": "node",
     "declaration": true,
+    "declarationMap": true,
+    "outDir": "./dist",
+    "rootDir": "./",
     "strict": true,
     "noImplicitAny": true,
     "strictNullChecks": true,
@@ -20,13 +23,19 @@
     "inlineSources": true,
     "experimentalDecorators": true,
     "strictPropertyInitialization": false,
-    "skipLibCheck": true,
     "typeRoots": [
       "./node_modules/@types"
-    ]
+    ],
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true
   },
   "exclude": [
     "node_modules",
+    "dist",
+    "**/*.d.ts",
     "cdk.out"
   ]
 }

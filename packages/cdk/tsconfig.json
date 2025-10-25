@@ -1,0 +1,25 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./",
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "baseUrl": "./",
+    "paths": {
+      "@lunaris/aws-constructs": ["../aws-constructs/src"]
+    }
+  },
+  "include": [
+    "bin/**/*",
+    "lib/**/*",
+    "lambda/**/*",
+    "stepfunctions/**/*",
+    "test/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "cdk.out"
+  ]
+}
