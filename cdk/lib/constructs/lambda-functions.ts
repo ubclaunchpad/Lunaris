@@ -1,6 +1,11 @@
 import { Construct } from "constructs";
 import { Code, Function, Runtime } from "aws-cdk-lib/aws-lambda";
-import { NodejsFunction } from "aws-cdk-lib/aws-lambda-nodejs";
+import { Duration } from "aws-cdk-lib";
+import { Table } from "aws-cdk-lib/aws-dynamodb";
+
+export interface LambdaFunctionsProps {
+  runningInstancesTable: Table;
+}
 
 export class LambdaFunctions extends Construct {
   public readonly helloFunction: Function;
@@ -10,7 +15,7 @@ export class LambdaFunctions extends Construct {
   public readonly terminateInstanceFunction: Function;
   public readonly streamingLinkFunction: Function;
 
-  constructor(scope: Construct, id: string) {
+  constructor(scope: Construct, id: string, props: LambdaFunctionsProps) {
     super(scope, id);
 
     // API Gateway Lambda
@@ -20,10 +25,15 @@ export class LambdaFunctions extends Construct {
       handler: "hello.handler",
     });
 
-    this.deployInstanceFunction = new NodejsFunction(this, "DeployInstanceHandler", {
-      entry: "lambda/deployInstance.ts",
-      runtime: Runtime.NODEJS_22_X
-    })
+    this.deployInstanceFunction = new Function(this, "DeployInstanceHandler", {
+      runtime: Runtime.NODEJS_22_X,
+      code: Code.fromAsset("lambda"),
+      handler: "deployInstance.handler",
+      timeout: Duration.seconds(60),
+      environment: {
+        RUNNING_INSTANCES_TABLE: props.runningInstancesTable.tableName
+      }
+    });
 
     // Step Function Lambda handlers
     this.greetingHandler = new Function(this, "GreetingHandler", {
