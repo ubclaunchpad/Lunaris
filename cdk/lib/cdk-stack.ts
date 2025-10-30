@@ -50,11 +50,25 @@ export class CdkStack extends Stack {
       lambdaFunctions.updateRunningStreamsFunction
     );
 
+    // Grant DynamoDB permissions for UserTerminateEC2 workflow
+    dynamoDbTables.runningStreamsTable.grantReadData(
+      lambdaFunctions.checkRunningStreamsTerminateFunction
+    );
+    dynamoDbTables.runningInstancesTable.grantReadWriteData(
+      lambdaFunctions.terminateEC2Function
+    );
+    dynamoDbTables.runningStreamsTable.grantWriteData(
+      lambdaFunctions.updateRunningStreamsTerminateFunction
+    );
+
     // Create Step Functions with consistent naming and tagging
     const stepFunctions = new StepFunctions(this, "StepFunctions", {
       checkRunningStreamsFunction: lambdaFunctions.checkRunningStreamsFunction,
       deployEC2Function: lambdaFunctions.deployEC2Function,
       updateRunningStreamsFunction: lambdaFunctions.updateRunningStreamsFunction,
+      checkRunningStreamsTerminateFunction: lambdaFunctions.checkRunningStreamsTerminateFunction,
+      terminateEC2Function: lambdaFunctions.terminateEC2Function,
+      updateRunningStreamsTerminateFunction: lambdaFunctions.updateRunningStreamsTerminateFunction,
     });
 
     // Apply consistent tags to Step Functions resources

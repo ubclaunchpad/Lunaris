@@ -4,8 +4,13 @@ import { Function } from "aws-cdk-lib/aws-lambda";
 import { WorkflowFactory } from "./workflow-factory";
 import { WorkflowRegistry } from "../workflows";
 
-export interface StepFunctionsProps {
-  [key: string]: Function;
+export interface StepFunctionsProps extends Record<string, Function> {
+  checkRunningStreamsFunction: Function;
+  deployEC2Function: Function;
+  updateRunningStreamsFunction: Function;
+  checkRunningStreamsTerminateFunction: Function;
+  terminateEC2Function: Function;
+  updateRunningStreamsTerminateFunction: Function;
 }
 
 export class StepFunctions extends Construct {
@@ -20,7 +25,7 @@ export class StepFunctions extends Construct {
     // Discover and register all workflows
     WorkflowRegistry.discoverWorkflows();
     
-    // Create all registered workflows
+    // Create all registered workflows with Lambda function mappings
     this.createWorkflows(props);
   }
 

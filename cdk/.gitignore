@@ -1,3 +1,7 @@
+*.js
+!jest.config.js
+*.d.ts
+
 # Compiled output
 dist/
 

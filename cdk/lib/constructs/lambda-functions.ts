@@ -20,6 +20,11 @@ export class LambdaFunctions extends Construct {
   public readonly deployEC2Function: Function;
   public readonly updateRunningStreamsFunction: Function;
 
+  // User Terminate EC2 Workflow Lambda Functions
+  public readonly checkRunningStreamsTerminateFunction: Function;
+  public readonly terminateEC2Function: Function;
+  public readonly updateRunningStreamsTerminateFunction: Function;
+
   constructor(scope: Construct, id: string, props: LambdaFunctionsProps) {
     super(scope, id);
 
@@ -33,6 +38,11 @@ export class LambdaFunctions extends Construct {
     this.checkRunningStreamsFunction = this.createCheckRunningStreamsFunction(props);
     this.deployEC2Function = this.createDeployEC2Function(props);
     this.updateRunningStreamsFunction = this.createUpdateRunningStreamsFunction(props);
+
+    // Create User Terminate EC2 Workflow Lambda functions
+    this.checkRunningStreamsTerminateFunction = this.createCheckRunningStreamsTerminateFunction(props);
+    this.terminateEC2Function = this.createTerminateEC2Function(props);
+    this.updateRunningStreamsTerminateFunction = this.createUpdateRunningStreamsTerminateFunction(props);
   }
 
   // Creates the Lambda function for deploying EC2 instances
@@ -115,6 +125,46 @@ export class LambdaFunctions extends Construct {
     });
   }
 
+  // Creates the Lambda function for checking running streams (Terminate workflow)
+  private createCheckRunningStreamsTerminateFunction(
+    props: LambdaFunctionsProps
+  ): Function {
+    return new Function(this, "CheckRunningStreamsTerminateHandler", {
+      ...this.getBaseLambdaConfig(),
+      handler: "handlers/user-terminate-ec2/check-running-streams.handler",
+      description: "Checks if user has active streaming sessions for termination",
+      environment: {
+        RUNNING_STREAMS_TABLE: props.runningStreamsTable.tableName,
+      },
+    });
+  }
+
+  // Creates the Lambda function for terminating EC2 instances
+  private createTerminateEC2Function(props: LambdaFunctionsProps): Function {
+    return new Function(this, "TerminateEC2Handler", {
+      ...this.getBaseLambdaConfig(),
+      handler: "handlers/user-terminate-ec2/terminate-ec2.handler",
+      description: "Terminates EC2 instance as part of user termination workflow",
+      environment: {
+        RUNNING_INSTANCES_TABLE: props.runningInstancesTable.tableName,
+      },
+    });
+  }
+
+  // Creates the Lambda function for updating running streams (Terminate workflow)
+  private createUpdateRunningStreamsTerminateFunction(
+    props: LambdaFunctionsProps
+  ): Function {
+    return new Function(this, "UpdateRunningStreamsTerminateHandler", {
+      ...this.getBaseLambdaConfig(),
+      handler: "handlers/user-terminate-ec2/update-running-streams.handler",
+      description: "Updates running streams table to mark session as terminated",
+      environment: {
+        RUNNING_STREAMS_TABLE: props.runningStreamsTable.tableName,
+      },
+    });
+  }
+
   // Returns the base configuration shared by all Lambda functions
   private getBaseLambdaConfig(): Pick<
     FunctionProps,
@@ -122,9 +172,7 @@ export class LambdaFunctions extends Construct {
   > {
     return {
       runtime: Runtime.NODEJS_22_X,
-      code: Code.fromAsset("../lambda/dist"),
-      timeout: Duration.seconds(30),
-      memorySize: 256,
+      code: Code.fromAsset("stepfunctions/example-workflow/lambdas"),
     };
   }
 }
