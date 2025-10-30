@@ -1,0 +1,62 @@
+# Node modules 
+**/node_modules
+**/npm-debug.log
+**/yarn-debug.log
+**/yarn-error.log
+**/.npm
+**/.yarn
+
+# Build outputs
+**/.next
+**/dist
+**/build
+**/.aws-sam
+**/cdk.out
+**/*.tsbuildinfo
+
+# Environment files
+**/.env
+**/.env.*
+!**/.env.example
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# IDE
+**/.vscode
+**/.idea
+**/.DS_Store
+**/*.swp
+**/*.swo
+
+# Testing
+**/coverage
+**/.nyc_output
+**/test
+
+# Documentation
+**/*.md
+!README.md
+
+# CI/CD
+.github
+.claude
+
+# AWS
+**/.aws
+**/.aws-sam
+
+# Logs
+**/logs
+**/*.log
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db

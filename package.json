@@ -1,0 +1,32 @@
+{
+    "name": "lunaris",
+    "version": "1.0.1",
+    "description": "Cloud Gaming Platform - Monorepo",
+    "private": true,
+    "workspaces": [
+        "lambda",
+        "cdk",
+        "frontend"
+    ],
+    "scripts": {
+        "docker:build": "docker-compose build",
+        "docker:start": "docker-compose up -d",
+        "docker:stop": "docker-compose down",
+        "docker:restart": "npm run docker:stop && npm run docker:start",
+        "docker:logs": "docker-compose logs -f",
+        "docker:test": "npm run docker:test:lambda",
+        "docker:test:lambda": "cd lambda && npm test",
+        "docker:clean": "docker-compose down -v && docker system prune -f",
+        "build:all": "npm run build --workspaces --if-present",
+        "test:all": "npm test --workspaces --if-present",
+        "install:all": "npm install --workspaces"
+    },
+    "engines": {
+        "node": ">=22.0.0",
+        "npm": ">=9.0.0"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/ubclaunchpad/lunaris"
+    }
+}

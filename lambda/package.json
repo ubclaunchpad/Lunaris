@@ -10,7 +10,9 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "clean": "rm -rf dist",
-    "prebuild": "npm run clean"
+    "prebuild": "npm run clean",
+    "docker:build": "npm run build && docker build -t lunaris-lambda .",
+    "docker:run": "docker run --rm -p 9000:8080 lunaris-lambda"
   },
   "devDependencies": {
     "@types/aws-lambda": "^8.10.156",
