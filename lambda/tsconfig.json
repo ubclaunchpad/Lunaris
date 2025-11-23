@@ -4,7 +4,7 @@
         "module": "CommonJS",
         "moduleResolution": "Node",
         "lib": ["es2022"],
-        "types": ["node", "jest"],
+        "types": ["node"],
         "outDir": "./dist",
         "rootDir": "./src",
         "allowJs": true,
@@ -25,7 +25,7 @@
         "esModuleInterop": true,
         "allowSyntheticDefaultImports": true,
         "forceConsistentCasingInFileNames": true,
-        "typeRoots": ["./node_modules/@types"],
+        "typeRoots": ["../node_modules/@types"],
         "isolatedModules": true
     },
     "include": ["src/**/*"],
