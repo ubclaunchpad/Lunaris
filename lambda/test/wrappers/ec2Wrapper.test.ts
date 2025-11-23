@@ -140,6 +140,66 @@ describe('EC2Wrapper', () => {
                 .toThrow('userId is required and cannot be empty');
         });
 
+        it('should throw error when subnet ID not found', async () => {
+            const mockConfig: EC2InstanceConfig = {
+                userId: 'test-user',
+                instanceType: 't3.micro',
+                subnetId: 'subnet-invalid',
+            };
+
+            ec2Mock.on(RunInstancesCommand).rejects({
+                name: 'InvalidSubnetID.NotFound',
+                message: 'Subnet not found',
+                $metadata: { httpStatusCode: 400 }
+            });
+
+            const ec2Wrapper = new EC2Wrapper();
+
+            await expect(ec2Wrapper.createInstance(mockConfig))
+                .rejects
+                .toThrow('Subnet ID subnet-invalid not found');
+        });
+
+        it('should throw error when security group not found', async () => {
+            const mockConfig: EC2InstanceConfig = {
+                userId: 'test-user',
+                instanceType: 't3.micro',
+                securityGroupIds: ['sg-invalid'],
+            };
+
+            ec2Mock.on(RunInstancesCommand).rejects({
+                name: 'InvalidGroup.NotFound',
+                message: 'Security group not found',
+                $metadata: { httpStatusCode: 400 }
+            });
+
+            const ec2Wrapper = new EC2Wrapper();
+
+            await expect(ec2Wrapper.createInstance(mockConfig))
+                .rejects
+                .toThrow('One or more security groups not found');
+        });
+
+        it('should throw error when key pair not found', async () => {
+            const mockConfig: EC2InstanceConfig = {
+                userId: 'test-user',
+                instanceType: 't3.micro',
+                keyName: 'invalid-keypair',
+            };
+
+            ec2Mock.on(RunInstancesCommand).rejects({
+                name: 'InvalidKeyPair.NotFound',
+                message: 'Key pair not found',
+                $metadata: { httpStatusCode: 400 }
+            });
+
+            const ec2Wrapper = new EC2Wrapper();
+
+            await expect(ec2Wrapper.createInstance(mockConfig))
+                .rejects
+                .toThrow("Key pair 'invalid-keypair' not found");
+        });
+
         it('should create EC2 instance with existing AMI ID', async () => {
             const mockInstanceId = 'i-ami-test';
             const mockAmiId = 'ami-1234567890abcdef0';
@@ -176,6 +236,32 @@ describe('EC2Wrapper', () => {
             expect(result.instanceId).toBe('i-wait-test');
             expect(waitUntilInstanceRunning).toHaveBeenCalledTimes(1);
         });
+
+        it('should throw error when waiter times out', async () => {
+            (waitUntilInstanceRunning as jest.Mock).mockRejectedValue({
+                name: 'WaiterTimedOut',
+                message: 'Timeout waiting for instance'
+            });
+
+            const ec2Wrapper = new EC2Wrapper();
+
+            await expect(ec2Wrapper.waitForInstanceRunning('i-timeout-test'))
+                .rejects
+                .toThrow('Timeout waiting for instance i-timeout-test to reach running state');
+        });
+
+        it('should throw generic error when wait fails', async () => {
+            (waitUntilInstanceRunning as jest.Mock).mockRejectedValue({
+                name: 'UnknownError',
+                message: 'Unknown error'
+            });
+
+            const ec2Wrapper = new EC2Wrapper();
+
+            await expect(ec2Wrapper.waitForInstanceRunning('i-error-test'))
+                .rejects
+                .toThrow('Error waiting for instance i-error-test');
+        });
     });
 
     describe('createAndWaitForInstance', () => {
@@ -195,6 +281,37 @@ describe('EC2Wrapper', () => {
             expect(result.state).toBe('running');
             expect(result.instanceId).toBe('i-create-wait');
             expect(waitUntilInstanceRunning).toHaveBeenCalledTimes(1);
+        });
+
+        it('should create instance without waiting when waitForRunning is false', async () => {
+            const mockConfig: EC2InstanceConfig = {
+                userId: 'test-user',
+                instanceType: 't3.micro',
+            };
+
+            mockEC2Success('i-no-wait');
+
+            const ec2Wrapper = new EC2Wrapper();
+            const result = await ec2Wrapper.createAndWaitForInstance(mockConfig, false);
+
+            expect(result.instanceId).toBe('i-no-wait');
+            expect(result.state).toBe('pending');
+            expect(waitUntilInstanceRunning).not.toHaveBeenCalled();
+        });
+
+        it('should wrap error with additional context when creation fails', async () => {
+            const mockConfig: EC2InstanceConfig = {
+                userId: 'test-user',
+                instanceType: 't3.micro',
+            };
+
+            ec2Mock.on(RunInstancesCommand).rejects(new Error('Network error'));
+
+            const ec2Wrapper = new EC2Wrapper();
+
+            await expect(ec2Wrapper.createAndWaitForInstance(mockConfig))
+                .rejects
+                .toThrow('Failed to create and wait for instance');
         });
     });
 
