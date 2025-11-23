@@ -20,8 +20,8 @@ export interface EC2InstanceConfig {
     keyName?: string;
     securityGroupIds?: string[];
     subnetId?: string;
-    iamInstanceProfile?: string
-    amiId?: string
+    iamInstanceProfile?: string;
+    amiId?: string;
 
     tags?: Record<string, string>;
 }
@@ -44,7 +44,7 @@ class EC2Wrapper {
 
     constructor(region?: string) {
         this.region = region || process.env.CDK_DEFAULT_REGION || "us-east-1";
-        this.client = new EC2Client({ region: this.region })
+        this.client = new EC2Client({ region: this.region });
     }
 
     private prepareInstanceInput(config: EC2InstanceConfig): RunInstancesCommandInput {
@@ -64,25 +64,25 @@ class EC2Wrapper {
                 Tags: [
                     {
                         Key: "userId",
-                        Value: userId
+                        Value: userId,
                     },
                     {
                         Key: "managed-by",
-                        Value: "lunaris"
+                        Value: "lunaris",
                     },
                     {
                         Key: "createdAt",
-                        Value: new Date().toISOString()
+                        Value: new Date().toISOString(),
                     },
                     {
                         Key: "purpose",
-                        Value: "cloud-gaming"
+                        Value: "cloud-gaming",
                     },
                     {
                         Key: "dcvConfigured",
-                        Value: amiId ? "true": "false"
+                        Value: amiId ? "true" : "false",
                     },
-                    ...Object.entries(tags).map(([key, value]) => ({ Key: key, Value: value }))
+                    ...Object.entries(tags).map(([key, value]) => ({ Key: key, Value: value })),
                 ],
             },
         ];
@@ -95,19 +95,20 @@ class EC2Wrapper {
             MinCount: 1,
             MaxCount: 1,
             TagSpecifications: tagSpecifications,
-            ImageId: amiId
+            ImageId: amiId,
         };
 
         if (keyName) input.KeyName = keyName;
-        if (securityGroupIds && securityGroupIds.length > 0) input.SecurityGroupIds = securityGroupIds;
+        if (securityGroupIds && securityGroupIds.length > 0)
+            input.SecurityGroupIds = securityGroupIds;
         if (subnetId) input.SubnetId = subnetId;
 
         return input;
     }
 
     async createInstance(config: EC2InstanceConfig): Promise<EC2InstanceResult> {
-        if (!config.userId || config.userId.trim() === '') {
-            throw new Error('userId is required and cannot be empty');
+        if (!config.userId || config.userId.trim() === "") {
+            throw new Error("userId is required and cannot be empty");
         }
 
         const input = this.prepareInstanceInput(config);
@@ -129,9 +130,8 @@ class EC2Wrapper {
                 privateIp: instance.PrivateIpAddress,
                 state: instance.State?.Name || "unknown",
                 createdAt: new Date().toISOString(),
-                instanceArn: generateArn(this.region, instanceId)
-            }
-
+                instanceArn: generateArn(this.region, instanceId),
+            };
         } catch (error: any) {
             switch (error.name) {
                 case "InstanceLimitExceeded":
@@ -150,9 +150,8 @@ class EC2Wrapper {
 
     async waitForInstanceRunning(
         instanceId: string,
-        maxWaitTimeSeconds: number = 300
+        maxWaitTimeSeconds: number = 300,
     ): Promise<EC2InstanceResult> {
-
         try {
             // poll until instance is running
             await waitUntilInstanceRunning(
@@ -161,12 +160,12 @@ class EC2Wrapper {
                     maxWaitTime: maxWaitTimeSeconds,
                 },
                 {
-                    InstanceIds: [instanceId]
-                }
-            )
+                    InstanceIds: [instanceId],
+                },
+            );
 
             const command = new DescribeInstancesCommand({
-                InstanceIds: [instanceId]
+                InstanceIds: [instanceId],
             });
             const response = await this.client.send(command);
 
@@ -184,13 +183,14 @@ class EC2Wrapper {
                 privateIp: instance.PrivateIpAddress,
                 state: instance.State?.Name || "running",
                 createdAt: createdAt,
-                instanceArn: generateArn(this.region, instanceId)
-            }
-
+                instanceArn: generateArn(this.region, instanceId),
+            };
         } catch (error: any) {
             switch (error.name) {
                 case "WaiterTimedOut":
-                    throw new Error(`Timeout waiting for instance ${instanceId} to reach running state`);
+                    throw new Error(
+                        `Timeout waiting for instance ${instanceId} to reach running state`,
+                    );
                 default:
                     throw new Error(`Error waiting for instance ${instanceId}`);
             }
@@ -199,7 +199,7 @@ class EC2Wrapper {
 
     async createAndWaitForInstance(
         config: EC2InstanceConfig,
-        waitForRunning: boolean = true
+        waitForRunning: boolean = true,
     ): Promise<EC2InstanceResult> {
         try {
             const instanceResult = await this.createInstance(config);
@@ -208,17 +208,20 @@ class EC2Wrapper {
             }
 
             return instanceResult;
-
         } catch (error: any) {
             const errorMessage = error.message || String(error);
-            throw new Error(`Failed to create and wait for instance: ${errorMessage}`, { cause: error });
+            throw new Error(`Failed to create and wait for instance: ${errorMessage}`, {
+                cause: error,
+            });
         }
     }
 
     async snapshotAMIImage(instanceId: string, userId: string): Promise<string> {
         try {
-            const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
-            const imageName = userId ? `Lunaris-DCV-${userId}-${timestamp}` : `Lunaris-DCV-${instanceId}-${timestamp}`
+            const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+            const imageName = userId
+                ? `Lunaris-DCV-${userId}-${timestamp}`
+                : `Lunaris-DCV-${instanceId}-${timestamp}`;
             const input: CreateImageCommandInput = {
                 InstanceId: instanceId,
                 Name: imageName,
@@ -229,56 +232,53 @@ class EC2Wrapper {
 
                 TagSpecifications: [
                     {
-                        ResourceType: 'image',
+                        ResourceType: "image",
                         Tags: [
-                            { Key: 'Name', Value: imageName },
-                            { Key: 'CreatedBy', Value: 'Lunaris' },
-                            { Key: 'CreatedAt', Value: new Date().toISOString() },
-                            { Key: 'SourceInstance', Value: instanceId },
-                            { Key: 'Purpose', Value: 'cloud-gaming' },
-                            { Key: 'HasDCV', Value: 'true' },
-                            ...(userId ? [{ Key: 'UserId', Value: userId }] : [])
-                        ]
+                            { Key: "Name", Value: imageName },
+                            { Key: "CreatedBy", Value: "Lunaris" },
+                            { Key: "CreatedAt", Value: new Date().toISOString() },
+                            { Key: "SourceInstance", Value: instanceId },
+                            { Key: "Purpose", Value: "cloud-gaming" },
+                            { Key: "HasDCV", Value: "true" },
+                            ...(userId ? [{ Key: "UserId", Value: userId }] : []),
+                        ],
                     },
                     {
-                        ResourceType: 'snapshot',
+                        ResourceType: "snapshot",
                         Tags: [
-                            { Key: 'Name', Value: `${imageName}-snapshot` },
-                            { Key: 'CreatedBy', Value: 'Lunaris' },
-                            { Key: 'SourceInstance', Value: instanceId }
-                        ]
-                    }
-                ]
-            }
+                            { Key: "Name", Value: `${imageName}-snapshot` },
+                            { Key: "CreatedBy", Value: "Lunaris" },
+                            { Key: "SourceInstance", Value: instanceId },
+                        ],
+                    },
+                ],
+            };
 
-            const command = new CreateImageCommand(input)
-            const response = await this.client.send(command)
+            const command = new CreateImageCommand(input);
+            const response = await this.client.send(command);
 
             if (!response.ImageId) {
-                throw new Error(`AMI ID is undefined for this instance ${instanceId}`)
+                throw new Error(`AMI ID is undefined for this instance ${instanceId}`);
             }
-            console.log(`Ami created: ${response.ImageId}`)
-            return response.ImageId
-
+            console.log(`Ami created: ${response.ImageId}`);
+            return response.ImageId;
         } catch (error) {
-            console.error("Unable to snapshot image:", instanceId, error)
+            console.error("Unable to snapshot image:", instanceId, error);
             throw error;
         }
-
     }
 
     async getInstance(instanceId: string): Promise<Instance> {
         try {
             const command = new DescribeInstancesCommand({
-                InstanceIds: [instanceId]
-            })
+                InstanceIds: [instanceId],
+            });
 
             const response = await this.client.send(command);
 
-            return response.Reservations![0].Instances![0]
-
+            return response.Reservations![0].Instances![0];
         } catch (err: any) {
-            throw err
+            throw err;
         }
     }
 
@@ -289,17 +289,15 @@ class EC2Wrapper {
                 Tags: [
                     {
                         Key: key,
-                        Value: value
-                    }
-                ]
-            })
-            await this.client.send(command)
-
+                        Value: value,
+                    },
+                ],
+            });
+            await this.client.send(command);
         } catch (err: any) {
-            throw err
+            throw err;
         }
     }
-
 }
 
 export default EC2Wrapper;

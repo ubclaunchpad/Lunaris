@@ -16,7 +16,11 @@ class DynamoDBWrapper {
     private client: DynamoDBDocumentClient;
     private tableName: string;
 
-    constructor(tableName: string, translateConfig?: TranslateConfig, clientConfig?: DynamoDBClientConfig) {
+    constructor(
+        tableName: string,
+        translateConfig?: TranslateConfig,
+        clientConfig?: DynamoDBClientConfig,
+    ) {
         const config: DynamoDBClientConfig = clientConfig ?? {};
 
         if (process.env.DYNAMODB_ENDPOINT) {

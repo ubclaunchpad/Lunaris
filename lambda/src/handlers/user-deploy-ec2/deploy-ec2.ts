@@ -53,7 +53,8 @@ export const handler = async (
         const { instance } = await createEC2Instance(ctx);
 
         const volumeResult = await ctx.ebsWrapper.attachOrReuseVolume(
-            { userId: ctx.userId }, instance.instanceId
+            { userId: ctx.userId },
+            instance.instanceId,
         );
 
         const dcvUrl = await createDCVSession(ctx, instance);
@@ -72,9 +73,7 @@ export const handler = async (
             state: instance.state,
             createdAt: instance.createdAt,
             streamingUrl: dcvUrl,
-        }
-
-
+        };
     } catch (err: unknown) {
         if (err instanceof Error) {
             console.error("Instance deployment failed:", err);
@@ -109,14 +108,15 @@ async function initializeDeploymentContext(event: DeployEc2Event): Promise<Deplo
         ebsWrapper: ebsWrapper,
         ssmWrapper: ssmWrapper,
         db: dbWrapper,
-    }
+    };
 }
 
 /**
  * Create EC2 with IAM profile and config
  */
-async function createEC2Instance(ctx: DeploymentContext):
-    Promise<{ instance: EC2InstanceResult; iamProfileArn: string }> {
+async function createEC2Instance(
+    ctx: DeploymentContext,
+): Promise<{ instance: EC2InstanceResult; iamProfileArn: string }> {
     const iamWrapper = new IAMWrapper();
     const iamProfileArn = await iamWrapper.getProfile();
 
@@ -143,8 +143,10 @@ async function createEC2Instance(ctx: DeploymentContext):
 /**
  * Create DCV for given EC2 instance
  */
-async function createDCVSession(ctx: DeploymentContext, instance: EC2InstanceResult):
-    Promise<string> {
+async function createDCVSession(
+    ctx: DeploymentContext,
+    instance: EC2InstanceResult,
+): Promise<string> {
     const dcvWrapper = new DCVWrapper(instance.instanceId, ctx.userId);
     return await dcvWrapper.getDCVSession();
 }
@@ -152,7 +154,10 @@ async function createDCVSession(ctx: DeploymentContext, instance: EC2InstanceRes
 /**
  * Creates AMI snapshot if one doesn't exist in parameter store
  */
-async function createAMISnapshotIfNeeded(ctx: DeploymentContext, instance: EC2InstanceResult): Promise<void> {
+async function createAMISnapshotIfNeeded(
+    ctx: DeploymentContext,
+    instance: EC2InstanceResult,
+): Promise<void> {
     if (!ctx.amiId) {
         const newAmiId = await ctx.ec2Wrapper.snapshotAMIImage(instance.instanceId, ctx.userId);
         await ctx.ssmWrapper.putParamInParamStore(AMI_ID_KEY, newAmiId);
@@ -166,7 +171,7 @@ async function saveDeploymentToDB(
     ctx: DeploymentContext,
     instance: EC2InstanceResult,
     volumeId: string,
-    dcvUrl: string
+    dcvUrl: string,
 ): Promise<void> {
     const putCommand = new PutCommand({
         TableName: ctx.db.getTableName(),
@@ -194,6 +199,5 @@ async function saveDeploymentToDB(
             throw new Error(`DynamoDB write failed: ${error.message}`);
         }
         throw new Error(`Unknown Error: ${error}`);
-
     }
 }

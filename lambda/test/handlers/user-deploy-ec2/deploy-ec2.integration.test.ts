@@ -43,7 +43,7 @@ describe("deploy-ec2 DynamoDB Integration Tests", () => {
                     new DeleteCommand({
                         TableName: testTableName,
                         Key: { instanceId },
-                    })
+                    }),
                 );
             } catch (error) {
                 console.error(`Error cleaning up ${instanceId}:`, error);
@@ -94,7 +94,7 @@ describe("deploy-ec2 DynamoDB Integration Tests", () => {
                 new GetCommand({
                     TableName: testTableName,
                     Key: { instanceId },
-                })
+                }),
             );
 
             expect(result.Item).toBeDefined();
@@ -113,7 +113,7 @@ describe("deploy-ec2 DynamoDB Integration Tests", () => {
                 new PutCommand({
                     TableName: testTableName,
                     Item: deployment,
-                })
+                }),
             );
 
             const result = await wrapper.getItem({ instanceId });
@@ -135,13 +135,13 @@ describe("deploy-ec2 DynamoDB Integration Tests", () => {
                 new PutCommand({
                     TableName: testTableName,
                     Item: deployment1,
-                })
+                }),
             );
             await docClient.send(
                 new PutCommand({
                     TableName: testTableName,
                     Item: deployment2,
-                })
+                }),
             );
 
             await new Promise((resolve) => setTimeout(resolve, 2000));
@@ -160,9 +160,7 @@ describe("deploy-ec2 DynamoDB Integration Tests", () => {
                 return createMockDeployment(instanceId, userId);
             });
 
-            await Promise.all(
-                deployments.map((deployment) => wrapper.putItem(deployment))
-            );
+            await Promise.all(deployments.map((deployment) => wrapper.putItem(deployment)));
 
             for (const deployment of deployments) {
                 const result = await wrapper.getItem({ instanceId: deployment.instanceId });
@@ -188,7 +186,7 @@ describe("deploy-ec2 DynamoDB Integration Tests", () => {
                     ExpressionAttributeValues: {
                         ":status": "terminated",
                     },
-                }
+                },
             );
 
             const result = await wrapper.getItem({ instanceId });

@@ -12,10 +12,10 @@ describe("DCVWrapper", () => {
     let mockEC2Wrapper: jest.Mocked<EC2Wrapper>;
     let mockSSMWrapper: jest.Mocked<SSMWrapper>;
 
-    const mockInstanceId = 'i-1234567890abcdef0';
-    const mockUserId = 'test-user-123';
-    const mockCommandId = 'cmd-1234567890abcdef0';
-    const mockPublicIp = '54.123.45.67';
+    const mockInstanceId = "i-1234567890abcdef0";
+    const mockUserId = "test-user-123";
+    const mockCommandId = "cmd-1234567890abcdef0";
+    const mockPublicIp = "54.123.45.67";
     const mockSessionName = `user-${mockUserId}-session`;
 
     beforeEach(() => {
@@ -26,8 +26,12 @@ describe("DCVWrapper", () => {
         mockSSMWrapper = new SSMWrapper() as jest.Mocked<SSMWrapper>;
 
         // Setup constructor mocks
-        (EC2Wrapper as jest.MockedClass<typeof EC2Wrapper>).mockImplementation(() => mockEC2Wrapper);
-        (SSMWrapper as jest.MockedClass<typeof SSMWrapper>).mockImplementation(() => mockSSMWrapper);
+        (EC2Wrapper as jest.MockedClass<typeof EC2Wrapper>).mockImplementation(
+            () => mockEC2Wrapper,
+        );
+        (SSMWrapper as jest.MockedClass<typeof SSMWrapper>).mockImplementation(
+            () => mockSSMWrapper,
+        );
 
         dcvWrapper = new DCVWrapper(mockInstanceId, mockUserId);
     });
@@ -39,144 +43,132 @@ describe("DCVWrapper", () => {
     // Helper to create mock EC2 Instance
     const createMockInstance = (overrides: Partial<Instance> = {}): Instance => ({
         InstanceId: mockInstanceId,
-        InstanceType: 'g4dn.xlarge',
-        State: { Name: 'running', Code: 16 },
+        InstanceType: "g4dn.xlarge",
+        State: { Name: "running", Code: 16 },
         PublicIpAddress: mockPublicIp,
-        PrivateIpAddress: '10.0.1.100',
+        PrivateIpAddress: "10.0.1.100",
         Tags: [],
         LaunchTime: new Date(),
-        ...overrides
+        ...overrides,
     });
 
     describe("getDCVSession", () => {
         it("should return streaming URL when DCV is already configured", async () => {
-
             mockEC2Wrapper.getInstance.mockResolvedValue(
                 createMockInstance({
-                    Tags: [{ Key: 'dcvConfigured', Value: 'true' }]
-                })
+                    Tags: [{ Key: "dcvConfigured", Value: "true" }],
+                }),
             );
             mockSSMWrapper.runCreateSession.mockResolvedValue(mockCommandId);
-            mockSSMWrapper.getCommandStatus.mockResolvedValue('Success');
-
+            mockSSMWrapper.getCommandStatus.mockResolvedValue("Success");
 
             const url = await dcvWrapper.getDCVSession();
 
-
-            expect(url).toBe(`https://${mockPublicIp}:8443?session-id=${encodeURIComponent(mockSessionName)}`);
+            expect(url).toBe(
+                `https://${mockPublicIp}:8443?session-id=${encodeURIComponent(mockSessionName)}`,
+            );
             expect(mockEC2Wrapper.getInstance).toHaveBeenCalledWith(mockInstanceId);
             expect(mockSSMWrapper.runInstall).not.toHaveBeenCalled(); // Should skip install
             expect(mockSSMWrapper.runCreateSession).toHaveBeenCalled();
         });
 
         it("should install DCV if not configured", async () => {
-
             mockEC2Wrapper.getInstance.mockResolvedValue(
                 createMockInstance({
-                    Tags: [{ Key: 'dcvConfigured', Value: 'false' }]
-                })
+                    Tags: [{ Key: "dcvConfigured", Value: "false" }],
+                }),
             );
             mockSSMWrapper.runInstall.mockResolvedValue(mockCommandId);
             mockSSMWrapper.runCreateSession.mockResolvedValue(mockCommandId);
-            mockSSMWrapper.getCommandStatus.mockResolvedValue('Success');
+            mockSSMWrapper.getCommandStatus.mockResolvedValue("Success");
             mockEC2Wrapper.modifyInstanceTag.mockResolvedValue();
-
 
             const url = await dcvWrapper.getDCVSession();
 
-
             expect(mockSSMWrapper.runInstall).toHaveBeenCalledWith({
-                instanceId: mockInstanceId
+                instanceId: mockInstanceId,
             });
             expect(mockEC2Wrapper.modifyInstanceTag).toHaveBeenCalledWith(
                 mockInstanceId,
-                'dcvConfigured',
-                'true'
+                "dcvConfigured",
+                "true",
             );
-            expect(url).toBe(`https://${mockPublicIp}:8443?session-id=${encodeURIComponent(mockSessionName)}`);
+            expect(url).toBe(
+                `https://${mockPublicIp}:8443?session-id=${encodeURIComponent(mockSessionName)}`,
+            );
         });
 
         it("should install DCV if tag is missing", async () => {
-
             mockEC2Wrapper.getInstance.mockResolvedValue(
-                createMockInstance({ Tags: [] }) // No dcvConfigured tag
+                createMockInstance({ Tags: [] }), // No dcvConfigured tag
             );
             mockSSMWrapper.runInstall.mockResolvedValue(mockCommandId);
             mockSSMWrapper.runCreateSession.mockResolvedValue(mockCommandId);
-            mockSSMWrapper.getCommandStatus.mockResolvedValue('Success');
+            mockSSMWrapper.getCommandStatus.mockResolvedValue("Success");
             mockEC2Wrapper.modifyInstanceTag.mockResolvedValue();
 
-
             await dcvWrapper.getDCVSession();
-
 
             expect(mockSSMWrapper.runInstall).toHaveBeenCalled();
         });
 
         it("should throw error if EC2 getInstance fails", async () => {
+            mockEC2Wrapper.getInstance.mockRejectedValue(new Error("Instance not found"));
 
-            mockEC2Wrapper.getInstance.mockRejectedValue(new Error('Instance not found'));
-
-
-            await expect(dcvWrapper.getDCVSession()).rejects.toThrow('Instance not found');
+            await expect(dcvWrapper.getDCVSession()).rejects.toThrow("Instance not found");
         });
     });
 
     describe("installDCV", () => {
         it("should successfully install DCV and tag instance", async () => {
-
             mockSSMWrapper.runInstall.mockResolvedValue(mockCommandId);
-            mockSSMWrapper.getCommandStatus.mockResolvedValue('Success');
+            mockSSMWrapper.getCommandStatus.mockResolvedValue("Success");
             mockEC2Wrapper.modifyInstanceTag.mockResolvedValue();
-
 
             await dcvWrapper.installDCV();
 
-
             expect(mockSSMWrapper.runInstall).toHaveBeenCalledWith({
-                instanceId: mockInstanceId
+                instanceId: mockInstanceId,
             });
-            expect(mockSSMWrapper.getCommandStatus).toHaveBeenCalledWith(mockCommandId, mockInstanceId);
+            expect(mockSSMWrapper.getCommandStatus).toHaveBeenCalledWith(
+                mockCommandId,
+                mockInstanceId,
+            );
             expect(mockEC2Wrapper.modifyInstanceTag).toHaveBeenCalledWith(
                 mockInstanceId,
-                'dcvConfigured',
-                'true'
+                "dcvConfigured",
+                "true",
             );
         });
 
         it("should wait for installation to complete", async () => {
-
             mockSSMWrapper.runInstall.mockResolvedValue(mockCommandId);
             mockSSMWrapper.getCommandStatus
-                .mockResolvedValueOnce('Pending')
-                .mockResolvedValueOnce('InProgress')
-                .mockResolvedValueOnce('Success');
+                .mockResolvedValueOnce("Pending")
+                .mockResolvedValueOnce("InProgress")
+                .mockResolvedValueOnce("Success");
             mockEC2Wrapper.modifyInstanceTag.mockResolvedValue();
 
-
             await dcvWrapper.installDCV();
-
 
             expect(mockSSMWrapper.getCommandStatus).toHaveBeenCalledTimes(3);
         }, 100000);
 
         it("should throw error if installation fails", async () => {
-
             mockSSMWrapper.runInstall.mockResolvedValue(mockCommandId);
-            mockSSMWrapper.getCommandStatus.mockResolvedValue('Failed');
+            mockSSMWrapper.getCommandStatus.mockResolvedValue("Failed");
 
-
-            await expect(dcvWrapper.installDCV()).rejects.toThrow('SSM command failed with status: Failed');
+            await expect(dcvWrapper.installDCV()).rejects.toThrow(
+                "SSM command failed with status: Failed",
+            );
         }, 100000);
 
         it("should throw error if installation times out", async () => {
-
             mockSSMWrapper.runInstall.mockResolvedValue(mockCommandId);
-            mockSSMWrapper.getCommandStatus.mockResolvedValue('Pending'); // Never completes
+            mockSSMWrapper.getCommandStatus.mockResolvedValue("Pending"); // Never completes
 
             jest.useFakeTimers();
 
-             
             const promise = dcvWrapper.installDCV();
 
             // Fast-forward time past the timeout (1800 seconds = 1800000ms)
@@ -194,54 +186,49 @@ describe("DCVWrapper", () => {
 
             await Promise.all([
                 expect(promise).rejects.toThrow(/Timeout waiting for SSM command/),
-                advancePromise
+                advancePromise,
             ]);
 
             jest.useRealTimers();
         });
 
         it("should throw error if tagging fails", async () => {
-
             mockSSMWrapper.runInstall.mockResolvedValue(mockCommandId);
-            mockSSMWrapper.getCommandStatus.mockResolvedValue('Success');
-            mockEC2Wrapper.modifyInstanceTag.mockRejectedValue(new Error('Tagging failed'));
+            mockSSMWrapper.getCommandStatus.mockResolvedValue("Success");
+            mockEC2Wrapper.modifyInstanceTag.mockRejectedValue(new Error("Tagging failed"));
 
-
-            await expect(dcvWrapper.installDCV()).rejects.toThrow('Tagging failed');
+            await expect(dcvWrapper.installDCV()).rejects.toThrow("Tagging failed");
         });
     });
 
     describe("createDCVSession", () => {
         it("should successfully create DCV session and return URL", async () => {
-
             mockSSMWrapper.runCreateSession.mockResolvedValue(mockCommandId);
-            mockSSMWrapper.getCommandStatus.mockResolvedValue('Success');
+            mockSSMWrapper.getCommandStatus.mockResolvedValue("Success");
             mockEC2Wrapper.getInstance.mockResolvedValue(
-                createMockInstance({ PublicIpAddress: mockPublicIp })
+                createMockInstance({ PublicIpAddress: mockPublicIp }),
             );
 
-
             const url = await dcvWrapper.createDCVSession();
-
 
             expect(mockSSMWrapper.runCreateSession).toHaveBeenCalledWith({
                 instanceId: mockInstanceId,
                 sessionName: mockSessionName,
-                sessionOwner: 'Administrator'
+                sessionOwner: "Administrator",
             });
-            expect(url).toBe(`https://${mockPublicIp}:8443?session-id=${encodeURIComponent(mockSessionName)}`);
+            expect(url).toBe(
+                `https://${mockPublicIp}:8443?session-id=${encodeURIComponent(mockSessionName)}`,
+            );
         });
 
         it("should wait for session creation to complete", async () => {
-
             mockSSMWrapper.runCreateSession.mockResolvedValue(mockCommandId);
             mockSSMWrapper.getCommandStatus
-                .mockResolvedValueOnce('Pending')
-                .mockResolvedValueOnce('Success');
+                .mockResolvedValueOnce("Pending")
+                .mockResolvedValueOnce("Success");
             mockEC2Wrapper.getInstance.mockResolvedValue(createMockInstance());
 
             jest.useFakeTimers();
-
 
             const promise = dcvWrapper.createDCVSession();
 
@@ -251,108 +238,92 @@ describe("DCVWrapper", () => {
 
             await promise;
 
-
             expect(mockSSMWrapper.getCommandStatus).toHaveBeenCalledTimes(2);
 
             jest.useRealTimers();
         });
 
         it("should throw error if session creation fails", async () => {
-
             // mockSSMWrapper.runCreateSession.mockResolvedValue(mockCommandId);
-            mockSSMWrapper.getCommandStatus.mockResolvedValue('Failed');
+            mockSSMWrapper.getCommandStatus.mockResolvedValue("Failed");
 
-
-            await expect(dcvWrapper.createDCVSession()).rejects.toThrow('SSM command failed with status: Failed');
+            await expect(dcvWrapper.createDCVSession()).rejects.toThrow(
+                "SSM command failed with status: Failed",
+            );
         });
 
         it("should throw error if public IP is missing", async () => {
-
             mockSSMWrapper.runCreateSession.mockResolvedValue(mockCommandId);
-            mockSSMWrapper.getCommandStatus.mockResolvedValue('Success');
+            mockSSMWrapper.getCommandStatus.mockResolvedValue("Success");
             mockEC2Wrapper.getInstance.mockResolvedValue(
-                createMockInstance({ PublicIpAddress: undefined })
+                createMockInstance({ PublicIpAddress: undefined }),
             );
 
-
-            await expect(dcvWrapper.createDCVSession()).rejects.toThrow('Could not get public Ip');
+            await expect(dcvWrapper.createDCVSession()).rejects.toThrow("Could not get public Ip");
         });
     });
 
     describe("getStreamingUrl", () => {
         it("should return correctly formatted streaming URL", async () => {
-
             mockEC2Wrapper.getInstance.mockResolvedValue(
-                createMockInstance({ PublicIpAddress: mockPublicIp })
+                createMockInstance({ PublicIpAddress: mockPublicIp }),
             );
-
 
             const url = await dcvWrapper.getStreamingUrl();
 
-
-            expect(url).toBe(`https://${mockPublicIp}:8443?session-id=${encodeURIComponent(mockSessionName)}`);
+            expect(url).toBe(
+                `https://${mockPublicIp}:8443?session-id=${encodeURIComponent(mockSessionName)}`,
+            );
         });
 
         it("should encode session name in URL", async () => {
-
-            const specialUserId = 'user@example.com';
+            const specialUserId = "user@example.com";
             const specialDcvWrapper = new DCVWrapper(mockInstanceId, specialUserId);
             const specialSessionName = `user-${specialUserId}-session`;
 
             mockEC2Wrapper.getInstance.mockResolvedValue(createMockInstance());
 
-
             const url = await specialDcvWrapper.getStreamingUrl();
-
 
             expect(url).toContain(encodeURIComponent(specialSessionName));
         });
 
         it("should throw error if public IP is missing", async () => {
-
             mockEC2Wrapper.getInstance.mockResolvedValue(
-                createMockInstance({ PublicIpAddress: undefined })
+                createMockInstance({ PublicIpAddress: undefined }),
             );
 
-
-            await expect(dcvWrapper.getStreamingUrl()).rejects.toThrow('Could not get public Ip');
+            await expect(dcvWrapper.getStreamingUrl()).rejects.toThrow("Could not get public Ip");
         });
 
         it("should throw error if getInstance fails", async () => {
+            mockEC2Wrapper.getInstance.mockRejectedValue(new Error("Network error"));
 
-            mockEC2Wrapper.getInstance.mockRejectedValue(new Error('Network error'));
-
-
-            await expect(dcvWrapper.getStreamingUrl()).rejects.toThrow('Network error');
+            await expect(dcvWrapper.getStreamingUrl()).rejects.toThrow("Network error");
         });
     });
 
     describe("waitForSSMCommand", () => {
         it("should return immediately when command succeeds", async () => {
-
             mockSSMWrapper.runInstall.mockResolvedValue(mockCommandId);
-            mockSSMWrapper.getCommandStatus.mockResolvedValue('Success');
+            mockSSMWrapper.getCommandStatus.mockResolvedValue("Success");
             mockEC2Wrapper.modifyInstanceTag.mockResolvedValue();
 
-
             await dcvWrapper.installDCV();
-
 
             expect(mockSSMWrapper.getCommandStatus).toHaveBeenCalledTimes(1);
         });
 
         it("should poll until command succeeds", async () => {
-
             mockSSMWrapper.runInstall.mockResolvedValue(mockCommandId);
             mockSSMWrapper.getCommandStatus
-                .mockResolvedValueOnce('Pending')
-                .mockResolvedValueOnce('InProgress')
-                .mockResolvedValueOnce('InProgress')
-                .mockResolvedValueOnce('Success');
+                .mockResolvedValueOnce("Pending")
+                .mockResolvedValueOnce("InProgress")
+                .mockResolvedValueOnce("InProgress")
+                .mockResolvedValueOnce("Success");
             mockEC2Wrapper.modifyInstanceTag.mockResolvedValue();
 
             jest.useFakeTimers();
-
 
             const promise = dcvWrapper.installDCV();
 
@@ -364,37 +335,36 @@ describe("DCVWrapper", () => {
 
             await promise;
 
-
             expect(mockSSMWrapper.getCommandStatus).toHaveBeenCalledTimes(4);
 
             jest.useRealTimers();
         });
 
         it("should throw error for failed status", async () => {
-
             mockSSMWrapper.runInstall.mockResolvedValue(mockCommandId);
-            mockSSMWrapper.getCommandStatus.mockResolvedValue('Failed');
+            mockSSMWrapper.getCommandStatus.mockResolvedValue("Failed");
 
-
-            await expect(dcvWrapper.installDCV()).rejects.toThrow('SSM command failed with status: Failed');
+            await expect(dcvWrapper.installDCV()).rejects.toThrow(
+                "SSM command failed with status: Failed",
+            );
         });
 
         it("should throw error for cancelled status", async () => {
-
             mockSSMWrapper.runInstall.mockResolvedValue(mockCommandId);
-            mockSSMWrapper.getCommandStatus.mockResolvedValue('Cancelled');
+            mockSSMWrapper.getCommandStatus.mockResolvedValue("Cancelled");
 
-
-            await expect(dcvWrapper.installDCV()).rejects.toThrow('SSM command failed with status: Cancelled');
+            await expect(dcvWrapper.installDCV()).rejects.toThrow(
+                "SSM command failed with status: Cancelled",
+            );
         });
 
         it("should throw error for timed out status", async () => {
-
             mockSSMWrapper.runInstall.mockResolvedValue(mockCommandId);
-            mockSSMWrapper.getCommandStatus.mockResolvedValue('TimedOut');
+            mockSSMWrapper.getCommandStatus.mockResolvedValue("TimedOut");
 
-
-            await expect(dcvWrapper.installDCV()).rejects.toThrow('SSM command failed with status: TimedOut');
+            await expect(dcvWrapper.installDCV()).rejects.toThrow(
+                "SSM command failed with status: TimedOut",
+            );
         });
     });
 });
