@@ -1,15 +1,17 @@
 // Test file to trigger ESLint and Prettier errors
 
-export function badFunction( ) {
+export function badFunction() {
     const unused_variable = "this will cause eslint error";
-  const bad_spacing="no spaces around equals";
-    
-    
+    const bad_spacing = "no spaces around equals";
+
     // Too many blank lines above
-    
-    if(true){console.log("bad formatting")}
-    
-    var oldVar = "should use let/const";
-    
-    return   "extra   spaces"
+
+    if (true) {
+        console.log("bad formatting");
+    }
+
+    const oldVar = "should use let/const";
+
+    console.log(unused_variable, bad_spacing, oldVar);
+    return "extra   spaces";
 }
