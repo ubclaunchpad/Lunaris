@@ -506,5 +506,22 @@ describe('deploy-ec2 Step Function handler', () => {
             expect(mockDCVWrapper.getDCVSession).toHaveBeenCalledTimes(1);
             expect(mockDynamoDBWrapper.putItem).toHaveBeenCalledTimes(1);
         });
+
+        it('should handle error without message gracefully', async () => {
+
+            mockSSMWrapper.getParamFromParamStore.mockRejectedValue(new Error());
+
+            const event = {
+                userId: 'test-user-123',
+                instanceType: 't3.micro' as const,
+            };
+
+
+            const result = await handler(event);
+
+
+            expect(result.success).toBe(false);
+            expect(result.error).toBe('Unknown error during instance creation');
+        });
     });
 });

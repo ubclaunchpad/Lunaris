@@ -463,4 +463,153 @@ describe('EC2Wrapper', () => {
                 .toThrow();
         });
     });
+
+    describe('snapshotAMIImage', () => {
+        it('should successfully create AMI snapshot with userId', async () => {
+            const mockInstanceId = 'i-snapshot-test';
+            const mockUserId = 'test-user-123';
+            const mockImageId = 'ami-snapshot123';
+
+            ec2Mock.on(CreateImageCommand).resolves({
+                ImageId: mockImageId
+            });
+
+            const ec2Wrapper = new EC2Wrapper();
+            const result = await ec2Wrapper.snapshotAMIImage(mockInstanceId, mockUserId);
+
+            expect(result).toBe(mockImageId);
+
+            const calls = ec2Mock.commandCalls(CreateImageCommand);
+            expect(calls).toHaveLength(1);
+            const input = calls[0].args[0].input;
+
+            expect(input.InstanceId).toBe(mockInstanceId);
+            expect(input.Name).toContain('Lunaris-DCV');
+            expect(input.Name).toContain(mockUserId);
+            expect(input.NoReboot).toBe(true);
+            expect(input.Description).toContain(mockUserId);
+
+            // Check image tags
+            const imageTags = input.TagSpecifications?.[0].Tags;
+            expect(imageTags?.find((t: any) => t.Key === 'CreatedBy')?.Value).toBe('Lunaris');
+            expect(imageTags?.find((t: any) => t.Key === 'HasDCV')?.Value).toBe('true');
+            expect(imageTags?.find((t: any) => t.Key === 'UserId')?.Value).toBe(mockUserId);
+            expect(imageTags?.find((t: any) => t.Key === 'SourceInstance')?.Value).toBe(mockInstanceId);
+
+            // Check snapshot tags
+            const snapshotTags = input.TagSpecifications?.[1].Tags;
+            expect(snapshotTags?.find((t: any) => t.Key === 'CreatedBy')?.Value).toBe('Lunaris');
+        });
+
+        it('should throw error when ImageId is undefined', async () => {
+            const mockInstanceId = 'i-snapshot-fail';
+            const mockUserId = 'test-user';
+
+            ec2Mock.on(CreateImageCommand).resolves({
+                ImageId: undefined
+            });
+
+            const ec2Wrapper = new EC2Wrapper();
+
+            await expect(ec2Wrapper.snapshotAMIImage(mockInstanceId, mockUserId))
+                .rejects
+                .toThrow(`AMI ID is undefined for this instance ${mockInstanceId}`);
+        });
+
+        it('should throw error when snapshot creation fails', async () => {
+            const mockInstanceId = 'i-snapshot-error';
+            const mockUserId = 'test-user';
+
+            ec2Mock.on(CreateImageCommand).rejects({
+                name: 'InvalidInstanceID.NotFound',
+                message: 'Instance not found',
+                $metadata: { httpStatusCode: 400 }
+            });
+
+            const ec2Wrapper = new EC2Wrapper();
+
+            await expect(ec2Wrapper.snapshotAMIImage(mockInstanceId, mockUserId))
+                .rejects
+                .toThrow();
+        });
+    });
+
+    describe('getInstance', () => {
+        it('should successfully retrieve instance details', async () => {
+            const mockInstanceId = 'i-get-test';
+            const mockInstance = createMockInstance({ InstanceId: mockInstanceId });
+
+            ec2Mock.on(DescribeInstancesCommand).resolves({
+                Reservations: [{
+                    Instances: [mockInstance]
+                }]
+            });
+
+            const ec2Wrapper = new EC2Wrapper();
+            const result = await ec2Wrapper.getInstance(mockInstanceId);
+
+            expect(result.InstanceId).toBe(mockInstanceId);
+            expect(result.State?.Name).toBe('pending');
+
+            const calls = ec2Mock.commandCalls(DescribeInstancesCommand);
+            expect(calls).toHaveLength(1);
+            expect(calls[0].args[0].input.InstanceIds).toContain(mockInstanceId);
+        });
+
+        it('should throw error when getInstance fails', async () => {
+            const mockInstanceId = 'i-not-found';
+
+            ec2Mock.on(DescribeInstancesCommand).rejects({
+                name: 'InvalidInstanceID.NotFound',
+                message: 'Instance not found',
+                $metadata: { httpStatusCode: 400 }
+            });
+
+            const ec2Wrapper = new EC2Wrapper();
+
+            await expect(ec2Wrapper.getInstance(mockInstanceId))
+                .rejects
+                .toThrow();
+        });
+    });
+
+    describe('modifyInstanceTag', () => {
+        it('should successfully modify instance tag', async () => {
+            const mockInstanceId = 'i-tag-test';
+            const mockKey = 'dcvConfigured';
+            const mockValue = 'true';
+
+            ec2Mock.on(CreateTagsCommand).resolves({});
+
+            const ec2Wrapper = new EC2Wrapper();
+            await ec2Wrapper.modifyInstanceTag(mockInstanceId, mockKey, mockValue);
+
+            const calls = ec2Mock.commandCalls(CreateTagsCommand);
+            expect(calls).toHaveLength(1);
+            const input = calls[0].args[0].input;
+
+            expect(input.Resources).toContain(mockInstanceId);
+            expect(input.Tags).toHaveLength(1);
+            expect(input.Tags?.[0].Key).toBe(mockKey);
+            expect(input.Tags?.[0].Value).toBe(mockValue);
+        });
+
+        it('should throw error when modifyInstanceTag fails', async () => {
+            const mockInstanceId = 'i-tag-error';
+            const mockKey = 'test-key';
+            const mockValue = 'test-value';
+
+            ec2Mock.on(CreateTagsCommand).rejects({
+                name: 'InvalidInstanceID.NotFound',
+                message: 'Instance not found',
+                $metadata: { httpStatusCode: 400 }
+            });
+
+            const ec2Wrapper = new EC2Wrapper();
+
+            await expect(ec2Wrapper.modifyInstanceTag(mockInstanceId, mockKey, mockValue))
+                .rejects
+                .toThrow();
+        });
+    });
 });
