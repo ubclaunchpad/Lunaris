@@ -42,7 +42,7 @@ open -a Docker
 
 If you encounter a `docker-compose: command not found` error, you have two options:
 
-#### Option 1: Install Standalone docker-compose 
+#### Option 1: Install Standalone docker-compose
 
 Install the standalone `docker-compose` binary to match the project scripts:
 
@@ -70,6 +70,7 @@ alias docker-compose='docker compose'
 ```
 
 Then reload your shell:
+
 ```bash
 source ~/.zshrc  # or source ~/.bashrc
 ```
