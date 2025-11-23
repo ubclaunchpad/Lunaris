@@ -9,7 +9,7 @@ COPY package.json package-lock.json ./
 COPY lambda/package.json lambda/tsconfig.json ./lambda/
 
 RUN --mount=type=cache,target=/root/.npm \
-    npm install --omit=dev --workspace=lambda
+    npm ci --omit=dev --workspace=lambda
 
 FROM public.ecr.aws/lambda/nodejs:22 AS builder
 ARG NPM_VERSION=11
@@ -23,7 +23,7 @@ COPY lambda/package.json lambda/tsconfig.json ./lambda/
 COPY lambda/src/ ./lambda/src/
 
 RUN --mount=type=cache,target=/root/.npm \
-    npm install --workspace=lambda
+    npm ci --workspace=lambda
 
 WORKDIR /app/lambda
 RUN npm run build
@@ -39,11 +39,11 @@ COPY --from=deps /app/node_modules ./node_modules
 # Set the CMD to your handler                                                                               │
 # This can be overridden when running the container or via SAM template                                     │
 # Format: <file-path>.<handler-function>                                                                    │
-# Example handlers:                                                                         │
+# Example handlers:                                                                                         │
 #   - handlers/deployInstance.handler                                                                       │
 #   - handlers/terminateInstance.handler                                                                    │
 #   - handlers/streamingLink.handler                                                                        │
 #   - handlers/user-deploy-ec2/check-running-streams.handler                                                │
 #   - handlers/user-deploy-ec2/deploy-ec2.handler                                                           │
 #   - handlers/user-deploy-ec2/update-running-streams.handler                                               │
- CMD ["handlers/deployInstance.handler"]       
+ CMD ["handlers/deployInstance.handler"]
