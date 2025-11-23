@@ -4,25 +4,32 @@ import DCVWrapper from '../../../src/utils/dcvWrapper';
 import EC2Wrapper from '../../../src/utils/ec2Wrapper';
 import IAMWrapper from '../../../src/utils/iamWrapper';
 import SSMWrapper from '../../../src/utils/ssmWrapper';
+import EBSWrapper from '../../../src/utils/ebsWrapper';
+import DynamoDBWrapper from '../../../src/utils/dynamoDbWrapper';
 import { EC2, type Instance } from "@aws-sdk/client-ec2";
 import { error } from 'console';
+import { EBSStatusEnum } from '../../../src/utils/ebsWrapper';
 
 jest.mock('../../../src/utils/ec2Wrapper');
 jest.mock('../../../src/utils/dcvWrapper');
 jest.mock('../../../src/utils/ssmWrapper');
 jest.mock('../../../src/utils/iamWrapper');
-// add test here
+jest.mock('../../../src/utils/ebsWrapper');
+jest.mock('../../../src/utils/dynamoDbWrapper');
 describe('deploy-ec2 Step Function handler', () => {
     let mockDCVWrapper: jest.Mocked<DCVWrapper>
     let mockSSMWrapper: jest.Mocked<SSMWrapper>
     let mockIAMWrapper: jest.Mocked<IAMWrapper>
     let mockEC2Wrapper: jest.Mocked<EC2Wrapper>
+    let mockEBSWrapper: jest.Mocked<EBSWrapper>
+    let mockDynamoDBWrapper: jest.Mocked<DynamoDBWrapper>
 
 
     const originalEnv = process.env;
     const mockInstanceId = 'i-1234567890abcdef0';
     const mockUserId = 'test-user-123';
     const mockPublicIp = '54.123.45.67';
+    const mockVolumeId = 'vol-1234567890abcdef0';
     const mockSessionName = `user-${mockUserId}-session`;
 
     beforeEach(() => {
@@ -32,15 +39,23 @@ describe('deploy-ec2 Step Function handler', () => {
         mockSSMWrapper = new SSMWrapper() as jest.Mocked<SSMWrapper>;
         mockIAMWrapper = new IAMWrapper() as jest.Mocked<IAMWrapper>;
         mockEC2Wrapper = new EC2Wrapper() as jest.Mocked<EC2Wrapper>;
+        mockEBSWrapper = new EBSWrapper() as jest.Mocked<EBSWrapper>;
+        mockDynamoDBWrapper = new DynamoDBWrapper('RunningStreams') as jest.Mocked<DynamoDBWrapper>;
 
         (DCVWrapper as jest.MockedClass<typeof DCVWrapper>).mockImplementation(() => mockDCVWrapper);
         (SSMWrapper as jest.MockedClass<typeof SSMWrapper>).mockImplementation(() => mockSSMWrapper);
         (IAMWrapper as jest.MockedClass<typeof IAMWrapper>).mockImplementation(() => mockIAMWrapper);
         (EC2Wrapper as jest.MockedClass<typeof EC2Wrapper>).mockImplementation(() => mockEC2Wrapper);
+        (EBSWrapper as jest.MockedClass<typeof EBSWrapper>).mockImplementation(() => mockEBSWrapper);
+        (DynamoDBWrapper as jest.MockedClass<typeof DynamoDBWrapper>).mockImplementation(() => mockDynamoDBWrapper);
+
+        mockDynamoDBWrapper.getTableName = jest.fn().mockReturnValue('RunningStreams');
+        mockDynamoDBWrapper.putItem = jest.fn().mockResolvedValue(undefined);
 
         process.env.SECURITY_GROUP_ID = 'sg-test123';
         process.env.SUBNET_ID = 'subnet-test456';
         process.env.KEY_PAIR_NAME = 'test-keypair';
+        process.env.RUNNING_INSTANCES_TABLE = 'RunningStreams';
     });
 
     afterEach(() => {
@@ -57,9 +72,7 @@ describe('deploy-ec2 Step Function handler', () => {
     };
 
     describe('successful deployment', () => {
-        // test for creating dcv instance and ec2 instance and success
-        it('should create EC2 instance AND install DCV and return success with all fields', async () => {
-
+        it('should create EC2 instance, attach EBS, install DCV, save to DB, and return success', async () => {
             mockSSMWrapper.getParamFromParamStore.mockResolvedValue("");
 
             const iamProfileArn = 'arn:aws:iam::123456789012:instance-profile/Lunaris-EC2-SSM-Profile';
@@ -76,7 +89,11 @@ describe('deploy-ec2 Step Function handler', () => {
             mockEC2Wrapper.createAndWaitForInstance.mockResolvedValue(mockInstance);
             mockEC2Wrapper.snapshotAMIImage.mockResolvedValue('ami-new123');
 
-            // after calling ec2
+            mockEBSWrapper.attachOrReuseVolume.mockResolvedValue({
+                volumeId: mockVolumeId,
+                status: EBSStatusEnum.IN_USE
+            });
+
             const url = `https://${mockPublicIp}:8443?session-id=${encodeURIComponent(mockSessionName)}`;
             mockDCVWrapper.getDCVSession.mockResolvedValue(url);
 
@@ -99,13 +116,16 @@ describe('deploy-ec2 Step Function handler', () => {
             expect(result.createdAt).toBeDefined();
             expect(result.streamingUrl).toBe(url);
 
-            // Verify wrapper method calls
             expect(mockSSMWrapper.getParamFromParamStore).toHaveBeenCalledWith('ami_id');
             expect(mockIAMWrapper.getProfile).toHaveBeenCalledTimes(1);
             expect(mockEC2Wrapper.createAndWaitForInstance).toHaveBeenCalledTimes(1);
+            expect(mockEBSWrapper.attachOrReuseVolume).toHaveBeenCalledWith(
+                { userId: 'test-user-123' },
+                mockInstanceId
+            );
             expect(mockDCVWrapper.getDCVSession).toHaveBeenCalledTimes(1);
+            expect(mockDynamoDBWrapper.putItem).toHaveBeenCalledTimes(1);
 
-            // Since amiId was empty, should create snapshot
             expect(mockEC2Wrapper.snapshotAMIImage).toHaveBeenCalledWith(mockInstanceId, 'test-user-123');
             expect(mockSSMWrapper.putParamInParamStore).toHaveBeenCalledWith('ami_id', 'ami-new123');
 
@@ -116,11 +136,10 @@ describe('deploy-ec2 Step Function handler', () => {
             expect(calledConfig.subnetId).toBe('subnet-test456');
             expect(calledConfig.keyName).toBe('test-keypair');
             expect(calledConfig.iamInstanceProfile).toBe(iamProfileArn);
-            expect(calledConfig.amiId).toBe(''); // Empty since not in param store yet
+            expect(calledConfig.amiId).toBe('');
         });
 
-        // test for creating ec2 instance with amiId already configured
-        it('should create EC2 instance AND install DCV and return success with all fields', async () => {
+        it('should skip AMI snapshot when AMI already exists in parameter store', async () => {
             const amiId = "ami-1234567890abcdef0"
             mockSSMWrapper.getParamFromParamStore.mockResolvedValue(amiId);
 
@@ -137,6 +156,11 @@ describe('deploy-ec2 Step Function handler', () => {
             };
             mockEC2Wrapper.createAndWaitForInstance.mockResolvedValue(mockInstance);
 
+            mockEBSWrapper.attachOrReuseVolume.mockResolvedValue({
+                volumeId: mockVolumeId,
+                status: EBSStatusEnum.IN_USE
+            });
+
             const url = `https://${mockPublicIp}:8443?session-id=${encodeURIComponent(mockSessionName)}`;
             mockDCVWrapper.getDCVSession.mockResolvedValue(url);
 
@@ -159,14 +183,13 @@ describe('deploy-ec2 Step Function handler', () => {
             expect(result.createdAt).toBeDefined();
             expect(result.streamingUrl).toBe(url);
 
-            // Verify wrapper method calls
             expect(mockSSMWrapper.getParamFromParamStore).toHaveBeenCalledWith('ami_id');
             expect(mockIAMWrapper.getProfile).toHaveBeenCalledTimes(1);
             expect(mockEC2Wrapper.createAndWaitForInstance).toHaveBeenCalledTimes(1);
+            expect(mockEBSWrapper.attachOrReuseVolume).toHaveBeenCalledTimes(1);
             expect(mockDCVWrapper.getDCVSession).toHaveBeenCalledTimes(1);
-            expect(mockDCVWrapper.installDCV).not.toHaveBeenCalled()
+            expect(mockDynamoDBWrapper.putItem).toHaveBeenCalledTimes(1);
 
-            // ami wasn't empty, should not snapshot
             expect(mockEC2Wrapper.snapshotAMIImage).not.toHaveBeenCalled()
             expect(mockSSMWrapper.putParamInParamStore).not.toHaveBeenCalled()
 
@@ -200,6 +223,11 @@ describe('deploy-ec2 Step Function handler', () => {
                 createdAt: new Date().toISOString()
             };
             mockEC2Wrapper.createAndWaitForInstance.mockResolvedValue(mockInstance);
+
+            mockEBSWrapper.attachOrReuseVolume.mockResolvedValue({
+                volumeId: mockVolumeId,
+                status: EBSStatusEnum.IN_USE
+            });
 
             const url = `https://${mockPublicIp}:8443?session-id=${encodeURIComponent(mockSessionName)}`;
             mockDCVWrapper.getDCVSession.mockResolvedValue(url);
@@ -396,7 +424,6 @@ describe('deploy-ec2 Step Function handler', () => {
         });
 
         it('should handle error without message gracefully', async () => {
-
             mockSSMWrapper.getParamFromParamStore.mockRejectedValue(new Error());
 
             const event = {
@@ -404,11 +431,80 @@ describe('deploy-ec2 Step Function handler', () => {
                 instanceType: 't3.micro' as const,
             };
 
+            const result = await handler(event);
+
+            expect(result.success).toBe(false);
+        });
+
+        it('should return error response when EBS volume attachment fails', async () => {
+            mockSSMWrapper.getParamFromParamStore.mockResolvedValue('ami-existing123');
+
+            const iamProfileArn = 'arn:aws:iam::123456789012:instance-profile/Lunaris-EC2-SSM-Profile';
+            mockIAMWrapper.getProfile.mockResolvedValue(iamProfileArn);
+
+            const mockInstance = {
+                instanceId: mockInstanceId,
+                instanceArn: `arn:aws:ec2:us-east-1:123456789012:instance/${mockInstanceId}`,
+                state: 'running',
+                publicIp: mockPublicIp,
+                privateIp: '10.0.1.100',
+                createdAt: new Date().toISOString()
+            };
+            mockEC2Wrapper.createAndWaitForInstance.mockResolvedValue(mockInstance);
+
+            mockEBSWrapper.attachOrReuseVolume.mockRejectedValue(new Error('Volume attachment failed'));
+
+            const event = {
+                userId: 'test-user-123',
+                instanceType: 't3.medium' as const,
+            };
 
             const result = await handler(event);
 
+            expect(result.success).toBe(false);
+            expect(mockEC2Wrapper.createAndWaitForInstance).toHaveBeenCalledTimes(1);
+            expect(mockEBSWrapper.attachOrReuseVolume).toHaveBeenCalledTimes(1);
+            expect(mockDCVWrapper.getDCVSession).not.toHaveBeenCalled();
+        });
+
+        it('should return error response when DynamoDB save fails', async () => {
+            mockSSMWrapper.getParamFromParamStore.mockResolvedValue('ami-existing123');
+
+            const iamProfileArn = 'arn:aws:iam::123456789012:instance-profile/Lunaris-EC2-SSM-Profile';
+            mockIAMWrapper.getProfile.mockResolvedValue(iamProfileArn);
+
+            const mockInstance = {
+                instanceId: mockInstanceId,
+                instanceArn: `arn:aws:ec2:us-east-1:123456789012:instance/${mockInstanceId}`,
+                state: 'running',
+                publicIp: mockPublicIp,
+                privateIp: '10.0.1.100',
+                createdAt: new Date().toISOString()
+            };
+            mockEC2Wrapper.createAndWaitForInstance.mockResolvedValue(mockInstance);
+
+            mockEBSWrapper.attachOrReuseVolume.mockResolvedValue({
+                volumeId: mockVolumeId,
+                status: EBSStatusEnum.IN_USE
+            });
+
+            const url = `https://${mockPublicIp}:8443?session-id=${encodeURIComponent(mockSessionName)}`;
+            mockDCVWrapper.getDCVSession.mockResolvedValue(url);
+
+            mockDynamoDBWrapper.putItem.mockRejectedValue(new Error('DynamoDB write failed'));
+
+            const event = {
+                userId: 'test-user-123',
+                instanceType: 't3.medium' as const,
+            };
+
+            const result = await handler(event);
 
             expect(result.success).toBe(false);
+            expect(mockEC2Wrapper.createAndWaitForInstance).toHaveBeenCalledTimes(1);
+            expect(mockEBSWrapper.attachOrReuseVolume).toHaveBeenCalledTimes(1);
+            expect(mockDCVWrapper.getDCVSession).toHaveBeenCalledTimes(1);
+            expect(mockDynamoDBWrapper.putItem).toHaveBeenCalledTimes(1);
         });
     });
 });
