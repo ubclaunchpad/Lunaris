@@ -5,8 +5,6 @@ import {
     AttachVolumeCommand,
     DescribeVolumesCommand,
     ModifyInstanceAttributeCommand,
-    DetachVolumeCommand,
-    DeleteVolumeCommand,
     type CreateVolumeRequest,
     type CreateVolumeCommandOutput,
     type AttachVolumeCommandOutput,
@@ -38,9 +36,6 @@ export enum EBSStatusEnum {
     AVAILABLE = "available",
     IN_USE = "in-use",
 }
-
-// NOTE: AWS configures EBS size based on GiB, not GB. So just leaving this here in case we need to convert
-const GBtoGIBConversion: number = 1.074;
 
 class EBSWrapper {
     private client: EC2Client;
@@ -81,7 +76,7 @@ class EBSWrapper {
             const response = await this.attachAndWaitForEBSVolume(instanceId, volume.volumeId);
 
             return response;
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.log("region is missing?", this.region);
             throw err;
         }
@@ -95,7 +90,7 @@ class EBSWrapper {
                 return true;
             }
             return false;
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error(`Failed to check existing instance for user ${userId}:`, err);
             throw err;
         }
@@ -116,7 +111,7 @@ class EBSWrapper {
                 volumeId: volume.VolumeId,
                 status,
             };
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error(`Failed to create EBS volume for user ${config.userId}:`, err);
             throw err;
         }
@@ -127,13 +122,13 @@ class EBSWrapper {
         volumeId: string,
     ): Promise<EBSVolumeResult> {
         try {
-            const response = await this.attachEBSVolume(instanceId, volumeId);
+            await this.attachEBSVolume(instanceId, volumeId);
             const status = await this.waitForEBSVolume(volumeId, 300, EBSStatusEnum.IN_USE);
             return {
                 volumeId: volumeId,
                 status: status,
             };
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error(`Failed to attach volume ${volumeId} to instance ${instanceId}:`, err);
             throw err;
         }
@@ -184,8 +179,8 @@ class EBSWrapper {
             const createVolumeCommand = new CreateVolumeCommand(input);
             const createVolumeResponse = await this.client.send(createVolumeCommand);
             return createVolumeResponse;
-        } catch (err: any) {
-            switch (err.name) {
+        } catch (err: unknown) {
+            switch ((err as { name?: string }).name) {
                 case "InsufficientVolumeCapacity":
                     throw new Error(
                         "Cannot create volume: There is not enough capacity to fulfill the EBS volume provision request",
@@ -225,7 +220,7 @@ class EBSWrapper {
             const modifyEBSCommand = new ModifyInstanceAttributeCommand(modifyEBSInput);
             await this.client.send(modifyEBSCommand);
             return response;
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error(`Failed to attach volume ${volumeId} to instance ${instanceId}:`, err);
             throw err;
         }
@@ -301,9 +296,10 @@ class EBSWrapper {
             }
 
             return null;
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error(`Error searching for volume by userId ${userId}:`, error);
-            throw new Error(`Failed to search for volume: ${error.message}`);
+            const message = error instanceof Error ? error.message : String(error);
+            throw new Error(`Failed to search for volume: ${message}`);
         }
     }
 

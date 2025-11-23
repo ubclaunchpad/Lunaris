@@ -4,7 +4,6 @@ import IAMWrapper from "../../utils/iamWrapper";
 import DCVWrapper from "../../utils/dcvWrapper";
 import SSMWrapper from "../../utils/ssmWrapper";
 import EBSWrapper from "../../utils/ebsWrapper";
-import { SSM } from "@aws-sdk/client-ssm";
 import { PutCommand } from "@aws-sdk/lib-dynamodb";
 import DynamoDBWrapper from "../../utils/dynamoDbWrapper";
 

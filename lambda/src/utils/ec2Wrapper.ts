@@ -132,8 +132,8 @@ class EC2Wrapper {
                 createdAt: new Date().toISOString(),
                 instanceArn: generateArn(this.region, instanceId),
             };
-        } catch (error: any) {
-            switch (error.name) {
+        } catch (error: unknown) {
+            switch ((error as { name?: string }).name) {
                 case "InstanceLimitExceeded":
                     throw new Error("Cannot create instance: Account instance limit exceeded");
                 case "InvalidSubnetID.NotFound":
@@ -143,7 +143,8 @@ class EC2Wrapper {
                 case "InvalidKeyPair.NotFound":
                     throw new Error(`Key pair '${input.KeyName}' not found`);
                 default:
-                    throw new Error(`Failed to create EC2 instance: ${error.message}`);
+                    const message = error instanceof Error ? error.message : String(error);
+                    throw new Error(`Failed to create EC2 instance: ${message}`);
             }
         }
     }
@@ -185,8 +186,8 @@ class EC2Wrapper {
                 createdAt: createdAt,
                 instanceArn: generateArn(this.region, instanceId),
             };
-        } catch (error: any) {
-            switch (error.name) {
+        } catch (error: unknown) {
+            switch ((error as { name?: string }).name) {
                 case "WaiterTimedOut":
                     throw new Error(
                         `Timeout waiting for instance ${instanceId} to reach running state`,
@@ -208,8 +209,8 @@ class EC2Wrapper {
             }
 
             return instanceResult;
-        } catch (error: any) {
-            const errorMessage = error.message || String(error);
+        } catch (error: unknown) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             throw new Error(`Failed to create and wait for instance: ${errorMessage}`, {
                 cause: error,
             });
@@ -277,7 +278,7 @@ class EC2Wrapper {
             const response = await this.client.send(command);
 
             return response.Reservations![0].Instances![0];
-        } catch (err: any) {
+        } catch (err: unknown) {
             throw err;
         }
     }
@@ -294,7 +295,7 @@ class EC2Wrapper {
                 ],
             });
             await this.client.send(command);
-        } catch (err: any) {
+        } catch (err: unknown) {
             throw err;
         }
     }

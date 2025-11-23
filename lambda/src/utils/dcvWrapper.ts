@@ -51,7 +51,7 @@ class DCVWrapper {
 
             // set tag dcvConfigured to true
             await this.ec2.modifyInstanceTag(this.instanceId, "dcvConfigured", "true");
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error("DCV Install failed", err);
             throw err;
         }
@@ -139,7 +139,7 @@ class DCVWrapper {
 
                 // wait before next poll
                 await new Promise((resolve) => setTimeout(resolve, pollInterval));
-            } catch (err: any) {
+            } catch (err: unknown) {
                 console.error(`Error waiting for SSM command:`, err);
                 throw err;
             }

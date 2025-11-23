@@ -53,7 +53,7 @@ class SSMWrapper {
             );
 
             return commandId;
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error("Failed to run DCV installation:", err);
             throw err;
         }
@@ -83,7 +83,7 @@ class SSMWrapper {
             );
 
             return commandId;
-        } catch (err: any) {
+        } catch (err: unknown) {
             throw err;
         }
     }
@@ -91,8 +91,8 @@ class SSMWrapper {
     private async ensureDocumentExists(docName: string, docFile: string): Promise<void> {
         try {
             await this.getDocument(docName);
-        } catch (err: any) {
-            if (err.name === "InvalidDocument") {
+        } catch (err: unknown) {
+            if ((err as { name?: string }).name === "InvalidDocument") {
                 await this.createDocument(docName, docFile);
             } else {
                 throw err;
@@ -122,7 +122,7 @@ class SSMWrapper {
             }
 
             return response.Command.CommandId;
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error("Sending SSM command failed:", err);
             throw err;
         }
@@ -137,7 +137,7 @@ class SSMWrapper {
             }
 
             return response.Name;
-        } catch (error: any) {
+        } catch (error: unknown) {
             throw error;
         }
     }
@@ -160,8 +160,8 @@ class SSMWrapper {
 
             const command = new CreateDocumentCommand(input);
             await this.client.send(command);
-        } catch (error: any) {
-            if (error.name === "DocumentAlreadyExistsException") {
+        } catch (error: unknown) {
+            if ((error as { name?: string }).name === "DocumentAlreadyExistsException") {
                 return;
             }
             console.error("Failed to create SSM document:", error);
@@ -179,7 +179,7 @@ class SSMWrapper {
             const response = await this.client.send(new GetCommandInvocationCommand(input));
 
             return response.Status || "Unknown";
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error("Error getting command status:", err);
             throw err;
         }

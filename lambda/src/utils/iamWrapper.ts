@@ -38,8 +38,8 @@ class IAMWrapper {
             }
 
             return profile.InstanceProfile.Arn;
-        } catch (err: any) {
-            if (err.name === "NoSuchEntityException") {
+        } catch (err: unknown) {
+            if ((err as { name?: string }).name === "NoSuchEntityException") {
                 const roleName = await this.getRole();
                 const profile = await this.createProfile();
 
@@ -69,8 +69,8 @@ class IAMWrapper {
             const command = new CreateInstanceProfileCommand(input);
             const response = await this.iamClient.send(command);
             return response.InstanceProfile;
-        } catch (err: any) {
-            if (err.name === "EntityAlreadyExistsException") {
+        } catch (err: unknown) {
+            if ((err as { name?: string }).name === "EntityAlreadyExistsException") {
                 // Profile was created by another process, fetch it
                 const getCommand = new GetInstanceProfileCommand({
                     InstanceProfileName: EC2_SSM_PROFILE,
@@ -92,9 +92,9 @@ class IAMWrapper {
             }
 
             return role.Role!.RoleName;
-        } catch (err: any) {
+        } catch (err: unknown) {
             // only create if role doesn't exist yet
-            if (err.name == "NoSuchEntityException") {
+            if ((err as { name?: string }).name == "NoSuchEntityException") {
                 const createdRole = await this.createRole();
                 if (!createdRole?.RoleName) {
                     throw new Error("Failed to create Role - no name returned");
@@ -137,8 +137,8 @@ class IAMWrapper {
             await this.attachSSMPolicy(EC2_SSM_ROLE, EC2_SSM_POLICY);
 
             return response.Role;
-        } catch (err: any) {
-            if (err.name === "EntityAlreadyExistsException") {
+        } catch (err: unknown) {
+            if ((err as { name?: string }).name === "EntityAlreadyExistsException") {
                 // Role exists, just get it
                 const getCommand = new GetRoleCommand({ RoleName: EC2_SSM_ROLE });
                 const existing = await this.iamClient.send(getCommand);
@@ -158,8 +158,8 @@ class IAMWrapper {
 
             const command = new AttachRolePolicyCommand(input);
             await this.iamClient.send(command);
-        } catch (err: any) {
-            if (err.name === "LimitExceededException") {
+        } catch (err: unknown) {
+            if ((err as { name?: string }).name === "LimitExceededException") {
                 // Policy already attached, ignore
                 console.log(`Policy ${policy} already attached to ${roleName}`);
                 return;
@@ -177,8 +177,8 @@ class IAMWrapper {
 
             const command = new AddRoleToInstanceProfileCommand(input);
             await this.iamClient.send(command);
-        } catch (err: any) {
-            if (err.name === "LimitExceededException") {
+        } catch (err: unknown) {
+            if ((err as { name?: string }).name === "LimitExceededException") {
                 // Role already attached to profile
                 console.log(`Role ${roleName} already attached to ${profileName}`);
                 return;
