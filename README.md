@@ -36,6 +36,54 @@ open -a Docker
 - Open Docker desktop to start the environment
 ```
 
+### Docker Compose Version Compatibility
+
+**⚠️ Important:** This project uses `docker-compose` (with hyphen) commands. Docker Desktop may come with Docker Compose v2, which uses `docker compose` (with space) instead.
+
+If you encounter a `docker-compose: command not found` error, you have two options:
+
+#### Option 1: Install Standalone docker-compose 
+
+Install the standalone `docker-compose` binary to match the project scripts:
+
+```bash
+# macOS (Homebrew)
+brew install docker-compose
+
+# Or download directly (macOS/Linux)
+# $(uname -s) returns your OS name (e.g., "Darwin" for macOS, "Linux" for Linux)
+# $(uname -m) returns your machine architecture (e.g., "x86_64", "arm64")
+sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+sudo chmod +x /usr/local/bin/docker-compose
+
+# Verify installation
+docker-compose --version
+```
+
+#### Option 2: Create an Alias
+
+If you prefer to use Docker Compose v2 (`docker compose`), add this alias to your shell config:
+
+```bash
+# Add to ~/.zshrc (macOS) or ~/.bashrc (Linux)
+alias docker-compose='docker compose'
+```
+
+Then reload your shell:
+```bash
+source ~/.zshrc  # or source ~/.bashrc
+```
+
+#### Check Your Docker Compose Version
+
+```bash
+# Check if you have Docker Compose v2 (plugin)
+docker compose version
+
+# Check if you have standalone docker-compose
+docker-compose --version
+```
+
 ### Installing AWS SAM CLI
 
 ```bash
