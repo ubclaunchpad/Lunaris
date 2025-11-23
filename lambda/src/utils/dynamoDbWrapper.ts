@@ -1,4 +1,4 @@
-import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { DynamoDBClient, DynamoDBClientConfig } from "@aws-sdk/client-dynamodb";
 import {
     DynamoDBDocumentClient,
     GetCommand,
@@ -16,9 +16,14 @@ class DynamoDBWrapper {
     private client: DynamoDBDocumentClient;
     private tableName: string;
 
-    constructor(tableName: string, translateConfig?: TranslateConfig) {
-        // DynamoDBDocumentClient allows use of native JS types rather than aws AttributeValue types
-        this.client = DynamoDBDocumentClient.from(new DynamoDBClient({}), translateConfig);
+    constructor(tableName: string, translateConfig?: TranslateConfig, clientConfig?: DynamoDBClientConfig) {
+        const config: DynamoDBClientConfig = clientConfig ?? {};
+
+        if (process.env.DYNAMODB_ENDPOINT) {
+            config.endpoint = process.env.DYNAMODB_ENDPOINT;
+        }
+
+        this.client = DynamoDBDocumentClient.from(new DynamoDBClient(config), translateConfig);
         this.tableName = tableName;
     }
 
