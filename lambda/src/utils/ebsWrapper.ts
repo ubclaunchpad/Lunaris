@@ -10,12 +10,14 @@ import {
     type AttachVolumeCommandOutput,
     type ModifyInstanceAttributeCommandInput,
     VolumeType,
+    DetachVolumeCommand,
     type Filter,
 } from "@aws-sdk/client-ec2";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 
 import DynamoDBWrapper from "./dynamoDbWrapper";
+import EC2Wrapper from "./ec2Wrapper";
 
 export interface CreateVolumeCommandConfig {
     userId: string;
@@ -36,6 +38,15 @@ export enum EBSStatusEnum {
     AVAILABLE = "available",
     IN_USE = "in-use",
 }
+
+export interface DetachResult {
+  volumeId: string;
+  state: string;                    
+  instanceId: string;               
+}
+
+// NOTE: AWS configures EBS size based on GiB, not GB. So just leaving this here in case we need to convert
+const GBtoGIBConversion: number = 1.074
 
 class EBSWrapper {
     private client: EC2Client;
@@ -326,6 +337,40 @@ class EBSWrapper {
             return createResult;
         }
     }
-}
+
+
+    // --- Detach volume ---
+
+    // Detach a single volume from the instance
+    async detachEBSVolume(volumeId:string, instanceId: string): Promise<DetachResult> {
+        try {
+
+            const command = new DetachVolumeCommand({
+            VolumeId: volumeId,
+            InstanceId: instanceId,
+            Force: false // Graceful detach
+            });
+
+            const response = await this.client.send(command);
+            
+            console.log(`Detaching volume ${volumeId} from instance ${instanceId}...`);
+
+            return {
+            volumeId: response.VolumeId || volumeId,
+            state: response.State || "unknown",
+            instanceId: response.InstanceId || instanceId
+            };
+        } catch (error: any) {
+            console.error(`Failed to detach volume ${volumeId}:`, error);
+            if (error.code === 'VolumeInUse') {
+                throw new Error(`The volume ${volumeId} is currently in use and cannot be detached.`);
+            } else if (error.code === 'InvalidVolume.NotFound') {
+                throw new Error(`The specified volume ${volumeId} was not found.`);
+            } else {
+                throw error; 
+            }
+        }
+    }
+}   
 
 export default EBSWrapper;

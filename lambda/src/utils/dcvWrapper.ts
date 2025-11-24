@@ -1,5 +1,12 @@
+import { SSMClient, SendCommandCommand, SendCommandCommandInput } from "@aws-sdk/client-ssm";
 import EC2Wrapper from "./ec2Wrapper";
 import SSMWrapper from "./ssmWrapper";
+
+export interface StopDCVSessionResult {
+  instanceId?: string;
+  stoppedSuccessfully: boolean;
+  message: string;
+}
 
 class DCVWrapper {
     private ssm: SSMWrapper;
@@ -106,6 +113,41 @@ class DCVWrapper {
             throw error;
         }
     }
+
+/**
+ * Stop DCV session gracefully (closes any active session)
+ */
+async stopDCVSession(): Promise<StopDCVSessionResult> {
+    try {
+        console.log(`Closing any active DCV sessions on instance ${this.instanceId}...`);
+
+        // Call SSM wrapper to close all sessions
+        const commandId = await this.ssm.runCloseDCVSession(this.instanceId);
+
+        console.log(`DCV close-session command started. Command ID: ${commandId}`);
+        console.log(`Waiting for DCV session to close (~30 seconds)...`);
+
+        // Wait for SSM command to complete
+        await this.waitForSSMCommand(commandId, 60);
+
+        console.log(`DCV session closed successfully on ${this.instanceId}`);
+
+        return <StopDCVSessionResult>{
+           instanceId: this.instanceId,
+          stoppedSuccessfully: true,
+          message: `DCV session closed on ${this.instanceId}`
+      };
+
+    } catch (error: any) {
+        console.error(`Failed to close DCV session:`, error);
+        return <StopDCVSessionResult>{
+           instanceId: this.instanceId,
+          stoppedSuccessfully: false,
+          message: `DCV close-session failed: ${error.message}`
+      };
+    }
+}
+
 
     private async waitForSSMCommand(
         commandId: string,

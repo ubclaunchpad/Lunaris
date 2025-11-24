@@ -30,6 +30,11 @@ interface RunDCVParams {
     sessionOwner?: string;
 }
 
+interface StopDCVParams {
+    instanceId: string;
+    sessionName: string;
+}
+
 class SSMWrapper {
     private client: SSMClient;
 
@@ -87,6 +92,24 @@ class SSMWrapper {
             throw err;
         }
     }
+
+  async runCloseDCVSession(instanceId: string): Promise<string> {
+        try {
+            // Send SSM command to close all DCV sessions
+            const commandId = await this.sendSSMCommand(
+                instanceId,
+                'AWS-RunShellScript',
+                { commands: ['sudo dcv close-session --all || true'] }
+            );
+
+            return commandId;
+        } catch (err: any) {
+            console.error('Failed to close DCV sessions:', err);
+            throw err;
+        }
+    }
+
+
 
     private async ensureDocumentExists(docName: string, docFile: string): Promise<void> {
         try {

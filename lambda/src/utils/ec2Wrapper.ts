@@ -5,10 +5,14 @@ import {
     waitUntilInstanceRunning,
     CreateImageCommand,
     type CreateImageCommandInput,
+    waitUntilInstanceTerminated,
+    waitUntilInstanceStopped,
     type RunInstancesCommandInput,
     type Instance,
+    type InstanceStateName,
     type _InstanceType,
     CreateTagsCommand,
+    TerminateInstancesCommand,
 } from "@aws-sdk/client-ec2";
 import { generateArn } from "./generateArn";
 
@@ -35,12 +39,39 @@ export interface EC2InstanceResult {
     instanceArn: string;
 }
 
+export interface InstanceDetails {
+  instanceId?: string;
+  state?: InstanceStateName;
+  publicIp?: string;
+  privateIp?: string;
+  volumes: Array<{
+    volumeId?: string;
+    deviceName?: string;
+    deleteOnTermination?: boolean;
+  }>;
+}
+
+export interface TerminateResult {
+  instanceId: string;
+  state: string;
+  wasAlreadyTerminated?: boolean;
+}
+
 const DEFAULT_INSTANCE_TYPE = "t3.medium";
+
+export enum ErrorMessages {
+    INSTANCE_NOT_FOUND = 'Instance does not exist or is not available',
+    TERMINATION_FAILED = 'Failed to terminate the instance',
+    INSTANCE_ALREADY_TERMINATED = 'Instance already terminated or terminating',
+    WAIT_TERMINATION_FAILED = 'Failed to wait for termination of the instance',
+    FAILED_GET_INSTANCE_DETAILS = 'Failed to retrieve instance details',
+}
 
 // EC2 Instances need custom IAM permissions
 class EC2Wrapper {
     private client: EC2Client;
     private region: string;
+    
 
     constructor(region?: string) {
         this.region = region || process.env.CDK_DEFAULT_REGION || "us-east-1";
@@ -215,6 +246,154 @@ class EC2Wrapper {
                 cause: error,
             });
         }
+    }
+
+    // --- EC2 Termination Functions ---
+     async getInstanceDetails(instanceId: string): Promise<InstanceDetails> {
+        try {
+            const command = new DescribeInstancesCommand({ InstanceIds: [instanceId] });
+            const response = await this.client.send(command);
+            const instance = response.Reservations?.[0]?.Instances?.[0];
+
+            if (!instance) throw new Error(`${ErrorMessages.INSTANCE_NOT_FOUND}: ${instanceId}`);
+
+            return {
+                instanceId: instance.InstanceId,
+                state: instance.State?.Name as InstanceStateName,
+                publicIp: instance.PublicIpAddress,
+                privateIp: instance.PrivateIpAddress,
+                volumes: instance.BlockDeviceMappings?.map(bdm => ({
+                    volumeId: bdm.Ebs?.VolumeId,
+                    deviceName: bdm.DeviceName,
+                    deleteOnTermination: bdm.Ebs?.DeleteOnTermination,
+                })) || [],
+            };
+        } catch (error: any) {
+            console.error(`${ErrorMessages.FAILED_GET_INSTANCE_DETAILS} for ${instanceId}:`, error);
+            throw error;
+        }
+    }
+
+    async canTerminate(instanceId: string): Promise<boolean> {
+        try {
+            const instanceDetails = await this.getInstanceDetails(instanceId);
+            const currentState = instanceDetails.state;
+
+            switch (currentState) {
+                case 'pending':
+                    throw new Error('Instance is in a pending state and cannot be terminated yet');
+                
+                case 'stopping':
+                    console.log(`Instance ${instanceId} is in stopping state. Waiting for it to stop...`);
+                    // Wait for the instance to stop before terminating
+                    const stopped = await this.handleStoppingState(instanceId);
+                    return stopped; 
+
+                case 'shutting-down':
+                    console.log(`Instance ${instanceId} is in shutting-down state. Already being terminated.`);
+                    return false;  
+
+                case 'terminated':
+                    console.log(`Instance ${instanceId} is already terminated.`);
+                    return false;  
+                
+                case 'running':
+                case 'stopped':
+                    return true; // Safe to terminate if the instance is running or stopped
+
+                default:
+                    throw new Error(`Unknown or unsupported instance state: ${currentState}`);
+            }
+        } catch (error: any) {
+            // If the instance does not exist, treat it as terminated
+            if (error.message.includes(ErrorMessages.INSTANCE_NOT_FOUND)) {
+                console.log(`Instance ${instanceId} is already terminated.`);
+                return false;
+            }
+            throw error;
+        }
+    }
+
+    async handleStoppingState(instanceId: string, maxWaitTimeSeconds: number = 300): Promise<boolean> {
+        console.log(`Instance ${instanceId} is in stopping state. Waiting for it to stop...`);
+
+        try {
+            await waitUntilInstanceStopped(
+                { client: this.client, maxWaitTime: maxWaitTimeSeconds },
+                { InstanceIds: [instanceId] }
+            );
+            console.log(`Instance ${instanceId} has stopped.`);
+            return true;
+        } catch (error) {
+            console.error(`Error waiting for instance ${instanceId} to stop:`, error);
+            throw new Error(`Timeout or error waiting for instance ${instanceId} to stop.`);
+        }
+    }
+
+    // Terminate the instance
+    async terminateInstance(instanceId: string): Promise<TerminateResult> {
+        try {
+            if (!await this.canTerminate(instanceId)) {
+                console.log(`${ErrorMessages.INSTANCE_ALREADY_TERMINATED} ${instanceId}`);
+                return {
+                    instanceId,
+                    state:'terminated',
+                    wasAlreadyTerminated: true,
+                };
+            }
+
+            const command = new TerminateInstancesCommand({ InstanceIds: [instanceId] });
+            const response = await this.client.send(command);
+            const terminatedInstance = response.TerminatingInstances?.[0];
+
+            if (!terminatedInstance) {
+                throw new Error(ErrorMessages.TERMINATION_FAILED);
+            }
+
+            return {
+                instanceId: terminatedInstance.InstanceId || instanceId,
+                state: terminatedInstance.CurrentState?.Name as InstanceStateName,
+                wasAlreadyTerminated: false,
+            };
+        } catch (error: any) {
+            console.error(`${ErrorMessages.TERMINATION_FAILED} for ${instanceId}:`, error);
+            throw error;
+        }
+    }
+
+    // Wait for the instance to terminate
+    async waitForTermination(instanceId: string, maxWaitTimeSeconds: number = 300): Promise<TerminateResult> {
+        try {
+            await waitUntilInstanceTerminated(
+                { client: this.client, maxWaitTime: maxWaitTimeSeconds },
+                { InstanceIds: [instanceId] }
+            );
+
+            const details = await this.getInstanceDetails(instanceId);
+
+            return {
+                instanceId,
+                state: details.state || 'unkown', 
+                wasAlreadyTerminated: false,
+            };
+        } catch (error: any) {
+            if (error.message.includes(ErrorMessages.INSTANCE_NOT_FOUND)) {
+                return { instanceId, state: 'terminated', wasAlreadyTerminated: false };
+            }
+            console.error(`${ErrorMessages.WAIT_TERMINATION_FAILED} for ${instanceId}:`, error);
+            throw new Error(`${ErrorMessages.WAIT_TERMINATION_FAILED}: ${error.message}`);
+        }
+    }
+
+    // Terminate the instance and wait for termination
+    async terminateAndWait(instanceId: string, maxWaitTimeSeconds: number = 300): Promise<TerminateResult> {
+        console.log('Calling terminateInstance');
+        const terminateResult = await this.terminateInstance(instanceId);
+
+        if (terminateResult.wasAlreadyTerminated) return terminateResult;
+
+        console.log('Calling waitUntilInstanceTerminated');
+        return await this.waitForTermination(instanceId, maxWaitTimeSeconds);
     }
 
     async snapshotAMIImage(instanceId: string, userId: string): Promise<string> {
