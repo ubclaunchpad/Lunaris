@@ -213,29 +213,29 @@ describe("SSMWrapper", () => {
     });
 
     describe("runCloseDCVSession", () => {
-    it("should send close-session command successfully", async () => {
-        ssmMock.on(SendCommandCommand).resolves(createMockSendCommandResponse());
+        it("should send close-session command successfully", async () => {
+            ssmMock.on(SendCommandCommand).resolves(createMockSendCommandResponse());
 
-        const commandId = await ssmWrapper.runCloseDCVSession(mockInstanceId);
+            const commandId = await ssmWrapper.runCloseDCVSession(mockInstanceId);
 
-        expect(commandId).toBe(mockCommandId);
+            expect(commandId).toBe(mockCommandId);
 
-        const calls = ssmMock.commandCalls(SendCommandCommand);
-        expect(calls[0].args[0].input.DocumentName).toBe('AWS-RunShellScript');
-        expect(calls[0].args[0].input.InstanceIds).toEqual([mockInstanceId]);
-        expect(calls[0].args[0].input.Parameters?.commands).toEqual([
-            'sudo dcv close-session --all || true'
-        ]);
+            const calls = ssmMock.commandCalls(SendCommandCommand);
+            expect(calls[0].args[0].input.DocumentName).toBe("AWS-RunShellScript");
+            expect(calls[0].args[0].input.InstanceIds).toEqual([mockInstanceId]);
+            expect(calls[0].args[0].input.Parameters?.commands).toEqual([
+                "sudo dcv close-session --all || true",
+            ]);
+        });
+
+        it("should throw if SendCommand fails", async () => {
+            ssmMock.on(SendCommandCommand).rejects(new Error("SSM error"));
+
+            await expect(ssmWrapper.runCloseDCVSession(mockInstanceId)).rejects.toThrow(
+                "SSM error",
+            );
+        });
     });
-
-    it("should throw if SendCommand fails", async () => {
-        ssmMock.on(SendCommandCommand).rejects(new Error("SSM error"));
-
-        await expect(ssmWrapper.runCloseDCVSession(mockInstanceId))
-            .rejects.toThrow("SSM error");
-    });
-});
-
 
     describe("getCommandStatus", () => {
         it("should return command status successfully", async () => {

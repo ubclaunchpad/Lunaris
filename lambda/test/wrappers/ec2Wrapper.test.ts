@@ -7,7 +7,7 @@ import {
     CreateImageCommand,
     CreateTagsCommand,
     TerminateInstancesCommand,
-    InstanceStateName
+    InstanceStateName,
 } from "@aws-sdk/client-ec2";
 import EC2Wrapper, { EC2InstanceConfig, ErrorMessages } from "../../src/utils/ec2Wrapper";
 import { ec2Mock, resetAllMocks } from "../__mocks__/aws-mocks";
@@ -17,7 +17,7 @@ jest.mock("@aws-sdk/client-ec2", () => {
     return {
         ...actual,
         waitUntilInstanceRunning: jest.fn(),
-        waitUntilInstanceTerminated: jest.fn(), 
+        waitUntilInstanceTerminated: jest.fn(),
         waitUntilInstanceStopped: jest.fn(),
     };
 });
@@ -63,12 +63,13 @@ describe("EC2Wrapper", () => {
         });
     };
 
-    const mockTerminateInstancesSuccess = (instanceId = 'i-test123') => {
+    const mockTerminateInstancesSuccess = (instanceId = "i-test123") => {
         ec2Mock.on(TerminateInstancesCommand).resolves({
-            TerminatingInstances: [{ InstanceId: instanceId, CurrentState: { Name: 'shutting-down' } }],
+            TerminatingInstances: [
+                { InstanceId: instanceId, CurrentState: { Name: "shutting-down" } },
+            ],
         });
     };
-
 
     beforeEach(() => {
         resetAllMocks();
@@ -551,7 +552,7 @@ describe("EC2Wrapper", () => {
         });
     });
 
-     describe("getInstance", () => {
+    describe("getInstance", () => {
         it("should successfully retrieve instance details", async () => {
             const mockInstanceId = "i-get-test";
             const mockInstance = createMockInstance({ InstanceId: mockInstanceId });
@@ -629,235 +630,257 @@ describe("EC2Wrapper", () => {
             ).rejects.toThrow();
         });
     });
-describe('EC2Wrapper Termination Functions', () => {
-    const mockInstanceId = 'i-terminate-test';
+    describe("EC2Wrapper Termination Functions", () => {
+        const mockInstanceId = "i-terminate-test";
 
-    const createMockInstance = (state: InstanceStateName) => ({
-        InstanceId: mockInstanceId,
-        State: { Name: state },
-        BlockDeviceMappings: [],
-        PublicIpAddress: '1.2.3.4',
-        PrivateIpAddress: '10.0.0.1',
-    });
+        const createMockInstance = (state: InstanceStateName) => ({
+            InstanceId: mockInstanceId,
+            State: { Name: state },
+            BlockDeviceMappings: [],
+            PublicIpAddress: "1.2.3.4",
+            PrivateIpAddress: "10.0.0.1",
+        });
 
-    beforeEach(() => {
-        resetAllMocks();
-        jest.clearAllMocks();
-    });
+        beforeEach(() => {
+            resetAllMocks();
+            jest.clearAllMocks();
+        });
 
-    describe('getInstanceDetails', () => {
-        it('should return instance details successfully', async () => {
-            ec2Mock.on(DescribeInstancesCommand).resolves({
-                Reservations: [{ Instances: [createMockInstance('running')] }]
+        describe("getInstanceDetails", () => {
+            it("should return instance details successfully", async () => {
+                ec2Mock.on(DescribeInstancesCommand).resolves({
+                    Reservations: [{ Instances: [createMockInstance("running")] }],
+                });
+
+                const ec2Wrapper = new EC2Wrapper();
+                const details = await ec2Wrapper.getInstanceDetails(mockInstanceId);
+
+                expect(details.instanceId).toBe(mockInstanceId);
+                expect(details.state).toBe("running");
+                expect(details.publicIp).toBe("1.2.3.4");
             });
 
-            const ec2Wrapper = new EC2Wrapper();
-            const details = await ec2Wrapper.getInstanceDetails(mockInstanceId);
+            it("should throw INSTANCE_NOT_FOUND if instance does not exist", async () => {
+                ec2Mock.on(DescribeInstancesCommand).resolves({ Reservations: [] });
 
-            expect(details.instanceId).toBe(mockInstanceId);
-            expect(details.state).toBe('running');
-            expect(details.publicIp).toBe('1.2.3.4');
-        });
-
-        it('should throw INSTANCE_NOT_FOUND if instance does not exist', async () => {
-            ec2Mock.on(DescribeInstancesCommand).resolves({ Reservations: [] });
-
-            const ec2Wrapper = new EC2Wrapper();
-            await expect(ec2Wrapper.getInstanceDetails(mockInstanceId))
-                .rejects
-                .toThrow(`${ErrorMessages.INSTANCE_NOT_FOUND}: ${mockInstanceId}`);
-        });
-    });
-
-    describe('canTerminate', () => {
-        it('should throw an error if the instance is in pending state', async () => {
-            ec2Mock.on(DescribeInstancesCommand).resolves({
-                Reservations: [{ Instances: [createMockInstance('pending')] }]
-            });
-
-            const ec2Wrapper = new EC2Wrapper();
-            await expect(ec2Wrapper.canTerminate(mockInstanceId))
-                .rejects
-                .toThrow('Instance is in a pending state and cannot be terminated yet');
-        });
-
-        it('should handle stopping state and wait for the instance to stop', async () => {
-            ec2Mock.on(DescribeInstancesCommand).resolves({
-                Reservations: [{ Instances: [createMockInstance('stopping')] }]
-            });
-
-            // Mock the handleStoppingState to resolve successfully
-            jest.spyOn(EC2Wrapper.prototype, 'handleStoppingState').mockResolvedValue(true);
-
-            const ec2Wrapper = new EC2Wrapper();
-            const result = await ec2Wrapper.canTerminate(mockInstanceId);
-
-            expect(result).toBe(true);
-            expect(ec2Wrapper.handleStoppingState).toHaveBeenCalledWith(mockInstanceId);
-        });
-
-        it('should return false if the instance is already in shutting-down state', async () => {
-            ec2Mock.on(DescribeInstancesCommand).resolves({
-                Reservations: [{ Instances: [createMockInstance('shutting-down')] }]
-            });
-
-            const ec2Wrapper = new EC2Wrapper();
-            const result = await ec2Wrapper.canTerminate(mockInstanceId);
-
-            expect(result).toBe(false);  // The instance is already shutting down
-        });
-
-        it('should return true if the instance is in running or stopped state', async () => {
-            ec2Mock.on(DescribeInstancesCommand).resolves({
-                Reservations: [{ Instances: [createMockInstance('running')] }]
-            });
-
-            const ec2Wrapper = new EC2Wrapper();
-            const result = await ec2Wrapper.canTerminate(mockInstanceId);
-
-            expect(result).toBe(true);  // It's safe to terminate if the instance is running
-
-            ec2Mock.on(DescribeInstancesCommand).resolves({
-                Reservations: [{ Instances: [createMockInstance('stopped')] }]
-            });
-
-            const resultStopped = await ec2Wrapper.canTerminate(mockInstanceId);
-            expect(resultStopped).toBe(true);  // It's safe to terminate if the instance is stopped
-        });
-
-        it('should return false if the instance is not found', async () => {
-            ec2Mock.on(DescribeInstancesCommand).resolves({ Reservations: [] });
-
-            const ec2Wrapper = new EC2Wrapper();
-            const result = await ec2Wrapper.canTerminate(mockInstanceId);
-
-            expect(result).toBe(false);  // Instance not found is treated as terminated
-        });
-    });
-
-    describe('handleStoppingState', () => {
-        it('should return true if the instance successfully stops', async () => {
-            // Mock the waitUntilInstanceStopped to resolve successfully
-            (waitUntilInstanceStopped as jest.Mock).mockResolvedValueOnce({ state: 'SUCCESS' });
-
-            const ec2Wrapper = new EC2Wrapper();
-            const result = await ec2Wrapper.handleStoppingState(mockInstanceId);
-
-            expect(result).toBe(true);  // Instance stopped successfully
-            expect(waitUntilInstanceStopped).toHaveBeenCalledWith(
-                expect.objectContaining({ maxWaitTime: 300 }),
-                expect.objectContaining({ InstanceIds: [mockInstanceId] })
-            );
-        });
-
-        it('should throw an error if the instance fails to stop', async () => {
-            // Mock the waitUntilInstanceStopped to reject with an error
-            (waitUntilInstanceStopped as jest.Mock).mockRejectedValueOnce(new Error('Timeout waiting for stop'));
-
-            const ec2Wrapper = new EC2Wrapper();
-            await expect(ec2Wrapper.handleStoppingState(mockInstanceId))
-                .rejects
-                .toThrow('Timeout or error waiting for instance i-terminate-test to stop.');
-        });
-    });
-
-   describe('terminateInstance', () => {
-    it('should terminate a running instance', async () => {
-        // Mocking DescribeInstancesCommand to return a running instance
-        ec2Mock.on(DescribeInstancesCommand).resolves({
-            Reservations: [{ Instances: [createMockInstance('running')] }]
-        });
-
-        // Mock TerminateInstancesCommand to simulate successful termination
-        ec2Mock.on(TerminateInstancesCommand).resolves({
-            TerminatingInstances: [{ InstanceId: mockInstanceId, CurrentState: { Name: 'shutting-down' } }]
-        });
-
-        const ec2Wrapper = new EC2Wrapper();
-        const result = await ec2Wrapper.terminateInstance(mockInstanceId);
-
-        expect(result.instanceId).toBe(mockInstanceId);
-        expect(result.state).toBe('shutting-down');
-        expect(result.wasAlreadyTerminated).toBe(false);  
-    });
-
-    it('should return already terminated if instance is terminated', async () => {
-        // Mocking DescribeInstancesCommand to return a terminated instance
-        ec2Mock.on(DescribeInstancesCommand).resolves({
-            Reservations: [{ Instances: [createMockInstance('terminated')] }]
-        });
-
-        const ec2Wrapper = new EC2Wrapper();
-        const result = await ec2Wrapper.terminateInstance(mockInstanceId);
-
-        expect(result.state).toBe('terminated');
-        expect(result.wasAlreadyTerminated).toBe(true);  
-    });
-
-    it('should throw error if termination fails', async () => {
-        // Mocking DescribeInstancesCommand to return a running instance
-        ec2Mock.on(DescribeInstancesCommand).resolves({
-            Reservations: [{ Instances: [createMockInstance('running')] }]
-        });
-
-        // Mock TerminateInstancesCommand to simulate failure
-        ec2Mock.on(TerminateInstancesCommand).rejects(new Error("Failed to terminate the instance"));
-
-        const ec2Wrapper = new EC2Wrapper();
-        await expect(ec2Wrapper.terminateInstance(mockInstanceId))
-            .rejects
-            .toThrow("Failed to terminate the instance");
-        });
-    });
-
-    describe('waitForTermination', () => {
-        it('should wait until termination and return terminated state', async () => {
-            (waitUntilInstanceTerminated as jest.Mock).mockResolvedValueOnce({ state: 'SUCCESS' });
-            ec2Mock.on(DescribeInstancesCommand).resolves({
-                Reservations: [{ Instances: [createMockInstance('terminated')] }]
-            });
-
-            const ec2Wrapper = new EC2Wrapper();
-            const result = await ec2Wrapper.waitForTermination(mockInstanceId);
-
-            expect(result.state).toBe('terminated');
-            expect(result.instanceId).toBe(mockInstanceId);
-            expect(result.wasAlreadyTerminated).toBe(false); 
-        });
-
-        it('should treat INSTANCE_NOT_FOUND as terminated', async () => {
-            (waitUntilInstanceTerminated as jest.Mock).mockRejectedValueOnce(new Error(`${ErrorMessages.INSTANCE_NOT_FOUND}: ${mockInstanceId}`));
-
-            const ec2Wrapper = new EC2Wrapper();
-            const result = await ec2Wrapper.waitForTermination(mockInstanceId);
-
-            expect(result.state).toBe('terminated');
-            expect(result.wasAlreadyTerminated).toBe(false); 
-        });
-    });
-
-    describe('terminateAndWait', () => {
-        it('should terminate instance and wait for termination', async () => {
-            jest.spyOn(EC2Wrapper.prototype, 'terminateInstance').mockResolvedValue({ instanceId: mockInstanceId, state: 'shutting-down', wasAlreadyTerminated: false });
-            jest.spyOn(EC2Wrapper.prototype, 'waitForTermination').mockResolvedValue({ instanceId: mockInstanceId, state: 'terminated', wasAlreadyTerminated: false });
-
-            const ec2Wrapper = new EC2Wrapper();
-            const result = await ec2Wrapper.terminateAndWait(mockInstanceId);
-
-            expect(result.state).toBe('terminated');
-            expect(result.instanceId).toBe(mockInstanceId);
-            expect(result.wasAlreadyTerminated).toBe(false);
-        });
-
-        it('should return immediately if instance already terminated', async () => {
-            jest.spyOn(EC2Wrapper.prototype, 'terminateInstance').mockResolvedValue({ instanceId: mockInstanceId, state: 'terminated', wasAlreadyTerminated: true });
-
-            const ec2Wrapper = new EC2Wrapper();
-            const result = await ec2Wrapper.terminateAndWait(mockInstanceId);
-
-            expect(result.wasAlreadyTerminated).toBe(true);  // instance already terminated
-            expect(result.state).toBe('terminated');
+                const ec2Wrapper = new EC2Wrapper();
+                await expect(ec2Wrapper.getInstanceDetails(mockInstanceId)).rejects.toThrow(
+                    `${ErrorMessages.INSTANCE_NOT_FOUND}: ${mockInstanceId}`,
+                );
             });
         });
+
+        describe("canTerminate", () => {
+            it("should throw an error if the instance is in pending state", async () => {
+                ec2Mock.on(DescribeInstancesCommand).resolves({
+                    Reservations: [{ Instances: [createMockInstance("pending")] }],
+                });
+
+                const ec2Wrapper = new EC2Wrapper();
+                await expect(ec2Wrapper.canTerminate(mockInstanceId)).rejects.toThrow(
+                    "Instance is in a pending state and cannot be terminated yet",
+                );
+            });
+
+            it("should handle stopping state and wait for the instance to stop", async () => {
+                ec2Mock.on(DescribeInstancesCommand).resolves({
+                    Reservations: [{ Instances: [createMockInstance("stopping")] }],
+                });
+
+                // Mock the handleStoppingState to resolve successfully
+                jest.spyOn(EC2Wrapper.prototype, "handleStoppingState").mockResolvedValue(true);
+
+                const ec2Wrapper = new EC2Wrapper();
+                const result = await ec2Wrapper.canTerminate(mockInstanceId);
+
+                expect(result).toBe(true);
+                expect(ec2Wrapper.handleStoppingState).toHaveBeenCalledWith(mockInstanceId);
+            });
+
+            it("should return false if the instance is already in shutting-down state", async () => {
+                ec2Mock.on(DescribeInstancesCommand).resolves({
+                    Reservations: [{ Instances: [createMockInstance("shutting-down")] }],
+                });
+
+                const ec2Wrapper = new EC2Wrapper();
+                const result = await ec2Wrapper.canTerminate(mockInstanceId);
+
+                expect(result).toBe(false); // The instance is already shutting down
+            });
+
+            it("should return true if the instance is in running or stopped state", async () => {
+                ec2Mock.on(DescribeInstancesCommand).resolves({
+                    Reservations: [{ Instances: [createMockInstance("running")] }],
+                });
+
+                const ec2Wrapper = new EC2Wrapper();
+                const result = await ec2Wrapper.canTerminate(mockInstanceId);
+
+                expect(result).toBe(true); // It's safe to terminate if the instance is running
+
+                ec2Mock.on(DescribeInstancesCommand).resolves({
+                    Reservations: [{ Instances: [createMockInstance("stopped")] }],
+                });
+
+                const resultStopped = await ec2Wrapper.canTerminate(mockInstanceId);
+                expect(resultStopped).toBe(true); // It's safe to terminate if the instance is stopped
+            });
+
+            it("should return false if the instance is not found", async () => {
+                ec2Mock.on(DescribeInstancesCommand).resolves({ Reservations: [] });
+
+                const ec2Wrapper = new EC2Wrapper();
+                const result = await ec2Wrapper.canTerminate(mockInstanceId);
+
+                expect(result).toBe(false); // Instance not found is treated as terminated
+            });
+        });
+
+        describe("handleStoppingState", () => {
+            it("should return true if the instance successfully stops", async () => {
+                // Mock the waitUntilInstanceStopped to resolve successfully
+                (waitUntilInstanceStopped as jest.Mock).mockResolvedValueOnce({ state: "SUCCESS" });
+
+                const ec2Wrapper = new EC2Wrapper();
+                const result = await ec2Wrapper.handleStoppingState(mockInstanceId);
+
+                expect(result).toBe(true); // Instance stopped successfully
+                expect(waitUntilInstanceStopped).toHaveBeenCalledWith(
+                    expect.objectContaining({ maxWaitTime: 300 }),
+                    expect.objectContaining({ InstanceIds: [mockInstanceId] }),
+                );
+            });
+
+            it("should throw an error if the instance fails to stop", async () => {
+                // Mock the waitUntilInstanceStopped to reject with an error
+                (waitUntilInstanceStopped as jest.Mock).mockRejectedValueOnce(
+                    new Error("Timeout waiting for stop"),
+                );
+
+                const ec2Wrapper = new EC2Wrapper();
+                await expect(ec2Wrapper.handleStoppingState(mockInstanceId)).rejects.toThrow(
+                    "Timeout or error waiting for instance i-terminate-test to stop.",
+                );
+            });
+        });
+
+        describe("terminateInstance", () => {
+            it("should terminate a running instance", async () => {
+                // Mocking DescribeInstancesCommand to return a running instance
+                ec2Mock.on(DescribeInstancesCommand).resolves({
+                    Reservations: [{ Instances: [createMockInstance("running")] }],
+                });
+
+                // Mock TerminateInstancesCommand to simulate successful termination
+                ec2Mock.on(TerminateInstancesCommand).resolves({
+                    TerminatingInstances: [
+                        { InstanceId: mockInstanceId, CurrentState: { Name: "shutting-down" } },
+                    ],
+                });
+
+                const ec2Wrapper = new EC2Wrapper();
+                const result = await ec2Wrapper.terminateInstance(mockInstanceId);
+
+                expect(result.instanceId).toBe(mockInstanceId);
+                expect(result.state).toBe("shutting-down");
+                expect(result.wasAlreadyTerminated).toBe(false);
+            });
+
+            it("should return already terminated if instance is terminated", async () => {
+                // Mocking DescribeInstancesCommand to return a terminated instance
+                ec2Mock.on(DescribeInstancesCommand).resolves({
+                    Reservations: [{ Instances: [createMockInstance("terminated")] }],
+                });
+
+                const ec2Wrapper = new EC2Wrapper();
+                const result = await ec2Wrapper.terminateInstance(mockInstanceId);
+
+                expect(result.state).toBe("terminated");
+                expect(result.wasAlreadyTerminated).toBe(true);
+            });
+
+            it("should throw error if termination fails", async () => {
+                // Mocking DescribeInstancesCommand to return a running instance
+                ec2Mock.on(DescribeInstancesCommand).resolves({
+                    Reservations: [{ Instances: [createMockInstance("running")] }],
+                });
+
+                // Mock TerminateInstancesCommand to simulate failure
+                ec2Mock
+                    .on(TerminateInstancesCommand)
+                    .rejects(new Error("Failed to terminate the instance"));
+
+                const ec2Wrapper = new EC2Wrapper();
+                await expect(ec2Wrapper.terminateInstance(mockInstanceId)).rejects.toThrow(
+                    "Failed to terminate the instance",
+                );
+            });
+        });
+
+        describe("waitForTermination", () => {
+            it("should wait until termination and return terminated state", async () => {
+                (waitUntilInstanceTerminated as jest.Mock).mockResolvedValueOnce({
+                    state: "SUCCESS",
+                });
+                ec2Mock.on(DescribeInstancesCommand).resolves({
+                    Reservations: [{ Instances: [createMockInstance("terminated")] }],
+                });
+
+                const ec2Wrapper = new EC2Wrapper();
+                const result = await ec2Wrapper.waitForTermination(mockInstanceId);
+
+                expect(result.state).toBe("terminated");
+                expect(result.instanceId).toBe(mockInstanceId);
+                expect(result.wasAlreadyTerminated).toBe(false);
+            });
+
+            it("should treat INSTANCE_NOT_FOUND as terminated", async () => {
+                (waitUntilInstanceTerminated as jest.Mock).mockRejectedValueOnce(
+                    new Error(`${ErrorMessages.INSTANCE_NOT_FOUND}: ${mockInstanceId}`),
+                );
+
+                const ec2Wrapper = new EC2Wrapper();
+                const result = await ec2Wrapper.waitForTermination(mockInstanceId);
+
+                expect(result.state).toBe("terminated");
+                expect(result.wasAlreadyTerminated).toBe(false);
+            });
+        });
+
+        describe("terminateAndWait", () => {
+            it("should terminate instance and wait for termination", async () => {
+                jest.spyOn(EC2Wrapper.prototype, "terminateInstance").mockResolvedValue({
+                    instanceId: mockInstanceId,
+                    state: "shutting-down",
+                    wasAlreadyTerminated: false,
+                });
+                jest.spyOn(EC2Wrapper.prototype, "waitForTermination").mockResolvedValue({
+                    instanceId: mockInstanceId,
+                    state: "terminated",
+                    wasAlreadyTerminated: false,
+                });
+
+                const ec2Wrapper = new EC2Wrapper();
+                const result = await ec2Wrapper.terminateAndWait(mockInstanceId);
+
+                expect(result.state).toBe("terminated");
+                expect(result.instanceId).toBe(mockInstanceId);
+                expect(result.wasAlreadyTerminated).toBe(false);
+            });
+
+            it("should return immediately if instance already terminated", async () => {
+                jest.spyOn(EC2Wrapper.prototype, "terminateInstance").mockResolvedValue({
+                    instanceId: mockInstanceId,
+                    state: "terminated",
+                    wasAlreadyTerminated: true,
+                });
+
+                const ec2Wrapper = new EC2Wrapper();
+                const result = await ec2Wrapper.terminateAndWait(mockInstanceId);
+
+                expect(result.wasAlreadyTerminated).toBe(true); // instance already terminated
+                expect(result.state).toBe("terminated");
+            });
+        });
     });
-})
+});
