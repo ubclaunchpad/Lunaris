@@ -10,8 +10,8 @@ services:
 
     lambda:
         build:
-            context: ./lambda
-            dockerfile: Dockerfile
+            context: .
+            dockerfile: lambda/Dockerfile
         container_name: lunaris-lambda
         ports:
             - "9000:8080"
@@ -28,12 +28,13 @@ services:
             - lunaris-network
     frontend:
         container_name: lunaris-frontend
+        platform: linux/amd64
         build:
-            context: ./frontend
-            dockerfile: Dockerfile
+            context: .
+            dockerfile: frontend/Dockerfile
         environment:
             - NODE_ENV=production
-            - NEXT_PUBLIC_API_URL=http://localhost:3000
+            - NEXT_PUBLIC_API_URL=http://localhost:9000
         ports:
             - "3000:3000"
         networks:

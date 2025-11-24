@@ -1,34 +1,49 @@
 FROM public.ecr.aws/lambda/nodejs:22 AS deps
-WORKDIR ${LAMBDA_TASK_ROOT}
+ARG NPM_VERSION=11
 
-COPY package.json package-lock.json tsconfig.json ./
+WORKDIR /app
 
-RUN npm ci --ignore-scripts
+RUN npm install -g npm@${NPM_VERSION}
+
+COPY package.json package-lock.json ./
+COPY lambda/package.json lambda/tsconfig.json ./lambda/
+
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --omit=dev --workspace=lambda
 
 FROM public.ecr.aws/lambda/nodejs:22 AS builder
-WORKDIR ${LAMBDA_TASK_ROOT}
-COPY --from=deps ${LAMBDA_TASK_ROOT}/node_modules ./node_modules
-COPY --from=deps ${LAMBDA_TASK_ROOT}/package.json ./package.json
-COPY --from=deps ${LAMBDA_TASK_ROOT}/tsconfig.json ./tsconfig.json
+ARG NPM_VERSION=11
 
-COPY src/ ./src/
+WORKDIR /app
+
+RUN npm install -g npm@${NPM_VERSION}
+
+COPY package.json package-lock.json ./
+COPY lambda/package.json lambda/tsconfig.json ./lambda/
+COPY lambda/src/ ./lambda/src/
+
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --workspace=lambda
+
+WORKDIR /app/lambda
 RUN npm run build
 
-FROM public.ecr.aws/lambda/nodejs:22 AS runtime          
-WORKDIR ${LAMBDA_TASK_ROOT}
-COPY --from=builder ${LAMBDA_TASK_ROOT}/dist ./
-COPY --from=deps ${LAMBDA_TASK_ROOT}/node_modules ./node_modules
+FROM public.ecr.aws/lambda/nodejs:22 AS runtime
 
-COPY package.json ./
+WORKDIR ${LAMBDA_TASK_ROOT}
+
+COPY --from=builder /app/lambda/dist ./
+COPY --from=builder /app/lambda/package.json ./
+COPY --from=deps /app/node_modules ./node_modules
 
 # Set the CMD to your handler                                                                               │
 # This can be overridden when running the container or via SAM template                                     │
 # Format: <file-path>.<handler-function>                                                                    │
-# Example handlers:                                                                         │
+# Example handlers:                                                                                         │
 #   - handlers/deployInstance.handler                                                                       │
 #   - handlers/terminateInstance.handler                                                                    │
 #   - handlers/streamingLink.handler                                                                        │
 #   - handlers/user-deploy-ec2/check-running-streams.handler                                                │
 #   - handlers/user-deploy-ec2/deploy-ec2.handler                                                           │
 #   - handlers/user-deploy-ec2/update-running-streams.handler                                               │
- CMD ["handlers/deployInstance.handler"]       
+ CMD ["handlers/deployInstance.handler"]
