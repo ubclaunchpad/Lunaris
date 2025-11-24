@@ -3,11 +3,14 @@ import { ec2Mock, dynamoDBDocumentMock, resetAllMocks } from "../__mocks__/aws-m
 import {
     CreateVolumeCommand,
     AttachVolumeCommand,
+    DetachVolumeCommand,
     DescribeVolumesCommand,
     ModifyInstanceAttributeCommand,
     type CreateVolumeCommandOutput,
     type AttachVolumeCommandOutput,
     type DescribeVolumesCommandOutput,
+    type DetachVolumeCommandOutput,
+    type VolumeAttachmentState
 } from "@aws-sdk/client-ec2";
 import { GetCommand, PutCommand } from "@aws-sdk/lib-dynamodb";
 
@@ -150,6 +153,28 @@ describe("EBSWrapper", () => {
                 totalRetryDelay: 0,
             },
         });
+    };
+
+   const createMockDetachVolume = (state: VolumeAttachmentState): DetachVolumeCommandOutput => ({
+        VolumeId: mockVolumeId,
+        InstanceId: mockInstanceId,
+        State: state,
+        $metadata: {
+            httpStatusCode: 200,
+            requestId: 'test-request-id',
+            attempts: 1,
+            totalRetryDelay: 0
+        }
+    });
+
+    const mockDetachVolumeSuccess = () => {
+        ec2Mock.on(DetachVolumeCommand).resolves(createMockDetachVolume('detaching'));
+    };
+
+    const mockDetachVolumeFailure = (errorCode: string, errorMessage: string) => {
+        const error = new Error(errorMessage) as Error & { code: string };
+        error.code = errorCode;
+        ec2Mock.on(DetachVolumeCommand).rejects(error);
     };
 
     beforeEach(() => {
@@ -376,5 +401,63 @@ describe("EBSWrapper", () => {
                 mockInstanceId,
             ),
         ).rejects.toThrow("Failed to search for volume");
+    });
+
+     describe('detachEBSVolume', () => {
+        it('should detach the volume successfully', async () => {
+            mockDetachVolumeSuccess();
+
+            const result = await ebsWrapper.detachEBSVolume(mockVolumeId, mockInstanceId);
+
+            expect(result.volumeId).toBe(mockVolumeId);
+            expect(result.state).toBe('detaching');
+            expect(result.instanceId).toBe(mockInstanceId);
+
+            const detachCalls = ec2Mock.commandCalls(DetachVolumeCommand);
+            expect(detachCalls).toHaveLength(1);
+            expect(detachCalls[0].args[0].input).toMatchObject({
+                VolumeId: mockVolumeId,
+                InstanceId: mockInstanceId,
+                Force: false
+            });
+        });
+
+        it('should throw an error if the volume is in use', async () => {
+            mockDetachVolumeFailure('VolumeInUse', 'The volume is in use');
+
+            await expect(
+                ebsWrapper.detachEBSVolume(mockVolumeId, mockInstanceId)
+            ).rejects.toThrow(`The volume ${mockVolumeId} is currently in use and cannot be detached.`);
+        });
+
+        it('should throw an error if the volume is not found', async () => {
+            mockDetachVolumeFailure('InvalidVolume.NotFound', 'The volume was not found');
+
+            await expect(
+                ebsWrapper.detachEBSVolume(mockVolumeId, mockInstanceId)
+            ).rejects.toThrow(`The specified volume ${mockVolumeId} was not found.`);
+        });
+
+        it('should handle unknown errors gracefully', async () => {
+            const error = new Error('Unknown error') as Error & { code: string };
+            error.code = 'UnknownError';
+            ec2Mock.on(DetachVolumeCommand).rejects(error);
+
+            await expect(
+                ebsWrapper.detachEBSVolume(mockVolumeId, mockInstanceId)
+            ).rejects.toThrow('Unknown error');
+        });
+
+        it('should return the correct state even if there are no attachment details', async () => {
+            const noAttachmentsMock = createMockDetachVolume('detaching');
+
+            ec2Mock.on(DetachVolumeCommand).resolves(noAttachmentsMock);
+
+            const result = await ebsWrapper.detachEBSVolume(mockVolumeId, mockInstanceId);
+
+            expect(result.volumeId).toBe(mockVolumeId);
+            expect(result.state).toBe('detaching');
+            expect(result.instanceId).toBe(mockInstanceId);
+        });
     });
 });
