@@ -16,7 +16,7 @@ const path = require("path");
 function generateTemplate() {
     try {
         console.log("Generating CloudFormation template...");
-        const synthOutput = execSync("npm run synth -- --quiet", {
+        execSync("npm run synth -- --quiet", {
             encoding: "utf8",
             cwd: __dirname + "/..",
         });

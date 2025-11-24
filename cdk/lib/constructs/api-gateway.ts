@@ -1,17 +1,16 @@
 import { Construct } from "constructs";
 import {
-    type IRestApi,
     LambdaRestApi,
     LambdaIntegration,
+    IRestApi,
     MethodResponse,
 } from "aws-cdk-lib/aws-apigateway";
 import { Function } from "aws-cdk-lib/aws-lambda";
 
 export interface ApiGatewayProps {
-    readonly deployInstanceFunction: Function;
-    readonly terminateInstanceFunction: Function;
-    readonly streamingLinkFunction: Function;
-    readonly deploymentStatusFunction: Function;
+    deployInstanceFunction: Function;
+    terminateInstanceFunction: Function;
+    streamingLinkFunction: Function;
 }
 
 export class ApiGateway extends Construct {
@@ -30,7 +29,6 @@ export class ApiGateway extends Construct {
         this.createDeployInstanceEndpoint(props.deployInstanceFunction);
         this.createTerminateInstanceEndpoint(props.terminateInstanceFunction);
         this.createStreamingLinkEndpoint(props.streamingLinkFunction);
-        this.createDeploymentStatusEndpoint(props.deploymentStatusFunction);
     }
 
     private createDeployInstanceEndpoint(lambdaFunction: Function): void {
@@ -38,7 +36,20 @@ export class ApiGateway extends Construct {
         const resource = this.restApi.root.addResource("deployInstance");
 
         resource.addMethod("POST", integration, {
-            methodResponses: this.populateMethodResponses(),
+            methodResponses: [
+                {
+                    statusCode: "200",
+                    responseModels: {
+                        "application/json": { modelId: "Empty" },
+                    },
+                },
+                {
+                    statusCode: "400",
+                    responseModels: {
+                        "application/json": { modelId: "Error" },
+                    },
+                },
+            ],
         });
     }
 

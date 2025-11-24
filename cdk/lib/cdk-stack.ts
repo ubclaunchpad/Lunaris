@@ -79,12 +79,16 @@ export class CdkStack extends Stack {
         cdk.Tags.of(stepFunctions).add("Component", "StepFunctions");
         cdk.Tags.of(stepFunctions).add("ManagedBy", "CDK");
 
+        const userDeployEC2Workflow = stepFunctions.getWorkflow("UserDeployEC2Workflow");
+        if (!userDeployEC2Workflow) {
+            throw new Error("UserDeployEC2Workflow not found");
+        }
+
         // Create API Gateway
-        const apiGateway = new ApiGateway(this, "ApiGateway", {
+        new ApiGateway(this, "ApiGateway", {
             deployInstanceFunction: lambdaFunctions.deployInstanceFunction,
             terminateInstanceFunction: lambdaFunctions.terminateInstanceFunction,
             streamingLinkFunction: lambdaFunctions.streamingLinkFunction,
-            deploymentStatusFunction: lambdaFunctions.deploymentStatusFunction,
         });
     }
 }

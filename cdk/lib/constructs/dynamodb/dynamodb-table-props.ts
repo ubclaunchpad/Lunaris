@@ -1,6 +1,3 @@
-import { AttributeType } from "aws-cdk-lib/aws-dynamodb";
-import { Table } from "aws-cdk-lib/aws-dynamodb";
-
 export interface DynamoDbWrapperProps {
     tableName: string;
     partitionKey: string;
