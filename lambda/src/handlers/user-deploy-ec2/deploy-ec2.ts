@@ -76,7 +76,10 @@ export const handler = async (
     } catch (err: unknown) {
         if (err instanceof Error) {
             console.error("Instance deployment failed:", err);
-            return { success: false, error: err.message };
+            return {
+                success: false,
+                error: err.message || "Unknown error during instance creation",
+            };
         }
 
         return { success: false, error: String(err) };
