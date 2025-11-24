@@ -263,6 +263,50 @@ describe("DCVWrapper", () => {
         });
     });
 
+    describe("stopDCVSession", () => {
+        it("should stop DCV session successfully", async () => {
+            const mockResult = {
+                instanceId: mockInstanceId,
+                stoppedSuccessfully: true,
+                message: `DCV session closed on ${mockInstanceId}`,
+            };
+
+            mockSSMWrapper.runCloseDCVSession.mockResolvedValue(mockCommandId);
+            // Spy on private method using 'as any'
+            (dcvWrapper as any).waitForSSMCommand = jest.fn().mockResolvedValue("Success");
+
+            const result = await dcvWrapper.stopDCVSession();
+
+            expect(mockSSMWrapper.runCloseDCVSession).toHaveBeenCalledWith(mockInstanceId);
+            expect((dcvWrapper as any).waitForSSMCommand).toHaveBeenCalledWith(mockCommandId, 60);
+            expect(result).toEqual(mockResult);
+        });
+
+        it("should return failed result if SSM command throws an error", async () => {
+            mockSSMWrapper.runCloseDCVSession.mockRejectedValue(new Error("SSM failed"));
+
+            const result = await dcvWrapper.stopDCVSession();
+
+            expect(result.stoppedSuccessfully).toBe(false);
+            expect(result.message).toMatch(/DCV close-session failed: SSM failed/);
+        });
+
+        it("should return failed result if SSM command times out or fails during wait", async () => {
+            mockSSMWrapper.runCloseDCVSession.mockResolvedValue(mockCommandId);
+            // Spy on private method to throw an error
+            (dcvWrapper as any).waitForSSMCommand = jest
+                .fn()
+                .mockRejectedValue(new Error("Timeout waiting for SSM command"));
+
+            const result = await dcvWrapper.stopDCVSession();
+
+            expect(result.stoppedSuccessfully).toBe(false);
+            expect(result.message).toMatch(
+                /DCV close-session failed: Timeout waiting for SSM command/,
+            );
+        });
+    });
+
     describe("getStreamingUrl", () => {
         it("should return correctly formatted streaming URL", async () => {
             mockEC2Wrapper.getInstance.mockResolvedValue(
