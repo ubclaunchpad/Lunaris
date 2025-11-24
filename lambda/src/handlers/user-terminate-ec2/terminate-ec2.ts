@@ -2,7 +2,7 @@ import EC2Wrapper from "../../utils/ec2Wrapper";
 import EBSWrapper from "../../utils/ebsWrapper";
 import DCVWrapper from "../../utils/dcvWrapper";
 import DynamoDBWrapper from "../../utils/dynamoDbWrapper";
-
+import { type GetCommandOutput } from "@aws-sdk/lib-dynamodb";
 export interface TerminateEc2Event {
     userId: string;
     instanceArn: string;
@@ -23,7 +23,7 @@ async function validateInstance(
     table: DynamoDBWrapper,
     instanceId: string,
     userId: string,
-): Promise<any> {
+): Promise<GetCommandOutput["Item"] | null> {
     try {
         const instance = await table.getItem({ instanceId });
         if (!instance) {
@@ -118,7 +118,8 @@ export const handler = async (event: TerminateEc2Event): Promise<TerminateEc2Res
         );
 
         const runningInstance = await validateInstance(runningInstancesTable, instanceId, userId);
-        if (runningInstance.status === "terminated") {
+
+        if (runningInstance!.status === "terminated") {
             return {
                 success: true,
                 instanceId,
