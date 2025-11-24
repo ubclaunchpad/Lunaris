@@ -3,190 +3,188 @@ Transform: AWS::Serverless-2016-10-31
 Description: "Lunaris Cloud Gaming Platform - Local Development Environment"
 
 Globals:
-  Function:
-    Runtime: nodejs22.x
-    CodeUri: lambda/dist/
-    Timeout: 60
-    Environment:
-      Variables:
-        NODE_ENV: local
-        RUNNING_INSTANCES_TABLE: !Ref RunningInstancesTable
-        RUNNING_STREAMS_TABLE_NAME: !Ref RunningStreamsTable
+    Function:
+        Runtime: nodejs22.x
+        CodeUri: lambda/dist/
+        Timeout: 60
+        Environment:
+            Variables:
+                NODE_ENV: local
+                RUNNING_INSTANCES_TABLE: !Ref RunningInstancesTable
+                RUNNING_STREAMS_TABLE_NAME: !Ref RunningStreamsTable
 
 Resources:
-  # DynamoDB Tables
-  RunningInstancesTable:
-    Type: AWS::DynamoDB::Table
-    Properties:
-      TableName: RunningInstances
-      BillingMode: PAY_PER_REQUEST
-      AttributeDefinitions:
-        - AttributeName: instanceId
-          AttributeType: S
-        - AttributeName: userId
-          AttributeType: S
-        - AttributeName: status
-          AttributeType: S
-        - AttributeName: creationTime
-          AttributeType: S
-      KeySchema:
-        - AttributeName: instanceId
-          KeyType: HASH
-      GlobalSecondaryIndexes:
-        - IndexName: StatusCreationTimeIndex
-          KeySchema:
-            - AttributeName: status
-              KeyType: HASH
-            - AttributeName: creationTime
-              KeyType: RANGE
-          Projection:
-            ProjectionType: ALL
-        - IndexName: UserIdIndex
-          KeySchema:
-            - AttributeName: userId
-              KeyType: HASH
-          Projection:
-            ProjectionType: ALL
-      PointInTimeRecoverySpecification:
-        PointInTimeRecoveryEnabled: true
+    # DynamoDB Tables
+    RunningInstancesTable:
+        Type: AWS::DynamoDB::Table
+        Properties:
+            TableName: RunningInstances
+            BillingMode: PAY_PER_REQUEST
+            AttributeDefinitions:
+                - AttributeName: instanceId
+                  AttributeType: S
+                - AttributeName: userId
+                  AttributeType: S
+                - AttributeName: status
+                  AttributeType: S
+                - AttributeName: creationTime
+                  AttributeType: S
+            KeySchema:
+                - AttributeName: instanceId
+                  KeyType: HASH
+            GlobalSecondaryIndexes:
+                - IndexName: StatusCreationTimeIndex
+                  KeySchema:
+                      - AttributeName: status
+                        KeyType: HASH
+                      - AttributeName: creationTime
+                        KeyType: RANGE
+                  Projection:
+                      ProjectionType: ALL
+                - IndexName: UserIdIndex
+                  KeySchema:
+                      - AttributeName: userId
+                        KeyType: HASH
+                  Projection:
+                      ProjectionType: ALL
+            PointInTimeRecoverySpecification:
+                PointInTimeRecoveryEnabled: true
 
-  RunningStreamsTable:
-    Type: AWS::DynamoDB::Table
-    Properties:
-      TableName: RunningStreams
-      BillingMode: PAY_PER_REQUEST
-      AttributeDefinitions:
-        - AttributeName: instanceArn
-          AttributeType: S
-      KeySchema:
-        - AttributeName: instanceArn
-          KeyType: HASH
+    RunningStreamsTable:
+        Type: AWS::DynamoDB::Table
+        Properties:
+            TableName: RunningStreams
+            BillingMode: PAY_PER_REQUEST
+            AttributeDefinitions:
+                - AttributeName: instanceArn
+                  AttributeType: S
+            KeySchema:
+                - AttributeName: instanceArn
+                  KeyType: HASH
 
-  # Lambda Functions
-  DeployInstanceFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      Handler: handlers/deployInstance.handler
-      Description: Deploy EC2 instance for cloud gaming
-      Events:
-        DeployInstanceApi:
-          Type: Api
-          Properties:
-            Path: /deployInstance
-            Method: post
-      Policies:
-        - DynamoDBWritePolicy:
-            TableName: !Ref RunningInstancesTable
-        - Version: "2012-10-17"
-          Statement:
-            - Effect: Allow
-              Action:
-                - ec2:RunInstances
-                - ec2:CreateTags
-                - ec2:DescribeInstances
-              Resource: "*"
+    # Lambda Functions
+    DeployInstanceFunction:
+        Type: AWS::Serverless::Function
+        Properties:
+            Handler: handlers/deployInstance.handler
+            Description: Deploy EC2 instance for cloud gaming
+            Events:
+                DeployInstanceApi:
+                    Type: Api
+                    Properties:
+                        Path: /deployInstance
+                        Method: post
+            Policies:
+                - DynamoDBWritePolicy:
+                      TableName: !Ref RunningInstancesTable
+                - Version: "2012-10-17"
+                  Statement:
+                      - Effect: Allow
+                        Action:
+                            - ec2:RunInstances
+                            - ec2:CreateTags
+                            - ec2:DescribeInstances
+                        Resource: "*"
 
-  TerminateInstanceFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      Handler: handlers/terminateInstance.handler
-      Description: Terminate EC2 instance
-      Events:
-        TerminateInstanceApi:
-          Type: Api
-          Properties:
-            Path: /terminateInstance
-            Method: post
+    TerminateInstanceFunction:
+        Type: AWS::Serverless::Function
+        Properties:
+            Handler: handlers/terminateInstance.handler
+            Description: Terminate EC2 instance
+            Events:
+                TerminateInstanceApi:
+                    Type: Api
+                    Properties:
+                        Path: /terminateInstance
+                        Method: post
 
-  StreamingLinkFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      Handler: handlers/streamingLink.handler
-      Description: Get streaming link for user
-      Events:
-        StreamingLinkApi:
-          Type: Api
-          Properties:
-            Path: /streamingLink
-            Method: get
+    StreamingLinkFunction:
+        Type: AWS::Serverless::Function
+        Properties:
+            Handler: handlers/streamingLink.handler
+            Description: Get streaming link for user
+            Events:
+                StreamingLinkApi:
+                    Type: Api
+                    Properties:
+                        Path: /streamingLink
+                        Method: get
 
-  # Step Function Lambda handlers
+    # Step Function Lambda handlers
 
-  CheckRunningStreamsFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      Handler: handlers/user-deploy-ec2/check-running-streams.handler
-      Description: Check if user has running streams
-      Policies:
-        - DynamoDBReadPolicy:
-            TableName: !Ref RunningStreamsTable
+    CheckRunningStreamsFunction:
+        Type: AWS::Serverless::Function
+        Properties:
+            Handler: handlers/user-deploy-ec2/check-running-streams.handler
+            Description: Check if user has running streams
+            Policies:
+                - DynamoDBReadPolicy:
+                      TableName: !Ref RunningStreamsTable
 
-  DeployEC2Function:
-    Type: AWS::Serverless::Function
-    Properties:
-      Handler: handlers/user-deploy-ec2/deploy-ec2.handler
-      Description: Deploy EC2 instance for user
+    DeployEC2Function:
+        Type: AWS::Serverless::Function
+        Properties:
+            Handler: handlers/user-deploy-ec2/deploy-ec2.handler
+            Description: Deploy EC2 instance for user
 
-  UpdateRunningStreamsFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      Handler: handlers/user-deploy-ec2/update-running-streams.handler
-      Description: Update running streams table
-      Policies:
-        - DynamoDBWritePolicy:
-            TableName: !Ref RunningStreamsTable
+    UpdateRunningStreamsFunction:
+        Type: AWS::Serverless::Function
+        Properties:
+            Handler: handlers/user-deploy-ec2/update-running-streams.handler
+            Description: Update running streams table
+            Policies:
+                - DynamoDBWritePolicy:
+                      TableName: !Ref RunningStreamsTable
 
-  # Step Functions
+    # Step Functions
 
-  UserDeployEC2Workflow:
-    Type: AWS::Serverless::StateMachine
-    Properties:
-      DefinitionUri: cdk/stepfunctions/user-deploy-ec2/definition.asl.json
-      DefinitionSubstitutions:
-        CheckRunningStreamsArn: !GetAtt CheckRunningStreamsFunction.Arn
-        DeployEC2Arn: !GetAtt DeployEC2Function.Arn
-        UpdateRunningStreamsArn: !GetAtt UpdateRunningStreamsFunction.Arn
-      Policies:
-        - LambdaInvokePolicy:
-            FunctionName: !Ref CheckRunningStreamsFunction
-        - LambdaInvokePolicy:
-            FunctionName: !Ref DeployEC2Function
-        - LambdaInvokePolicy:
-            FunctionName: !Ref UpdateRunningStreamsFunction
+    UserDeployEC2Workflow:
+        Type: AWS::Serverless::StateMachine
+        Properties:
+            DefinitionUri: cdk/stepfunctions/user-deploy-ec2/definition.asl.json
+            DefinitionSubstitutions:
+                CheckRunningStreamsArn: !GetAtt CheckRunningStreamsFunction.Arn
+                DeployEC2Arn: !GetAtt DeployEC2Function.Arn
+                UpdateRunningStreamsArn: !GetAtt UpdateRunningStreamsFunction.Arn
+            Policies:
+                - LambdaInvokePolicy:
+                      FunctionName: !Ref CheckRunningStreamsFunction
+                - LambdaInvokePolicy:
+                      FunctionName: !Ref DeployEC2Function
+                - LambdaInvokePolicy:
+                      FunctionName: !Ref UpdateRunningStreamsFunction
 
 Outputs:
-  ApiGatewayUrl:
-    Description: "API Gateway endpoint URL for local testing"
-    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
-    Export:
-      Name: !Sub "${AWS::StackName}-ApiGatewayUrl"
+    ApiGatewayUrl:
+        Description: "API Gateway endpoint URL for local testing"
+        Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
+        Export:
+            Name: !Sub "${AWS::StackName}-ApiGatewayUrl"
 
-  DeployInstanceEndpoint:
-    Description: "Deploy Instance API endpoint"
-    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/deployInstance"
+    DeployInstanceEndpoint:
+        Description: "Deploy Instance API endpoint"
+        Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/deployInstance"
 
-  TerminateInstanceEndpoint:
-    Description: "Terminate Instance API endpoint"
-    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/terminateInstance"
+    TerminateInstanceEndpoint:
+        Description: "Terminate Instance API endpoint"
+        Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/terminateInstance"
 
-  StreamingLinkEndpoint:
-    Description: "Streaming Link API endpoint"
-    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/streamingLink"
+    StreamingLinkEndpoint:
+        Description: "Streaming Link API endpoint"
+        Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/streamingLink"
 
-  RunningInstancesTableName:
-    Description: "Running Instances DynamoDB Table Name"
-    Value: !Ref RunningInstancesTable
-    Export:
-      Name: !Sub "${AWS::StackName}-RunningInstancesTable"
+    RunningInstancesTableName:
+        Description: "Running Instances DynamoDB Table Name"
+        Value: !Ref RunningInstancesTable
+        Export:
+            Name: !Sub "${AWS::StackName}-RunningInstancesTable"
 
-  RunningStreamsTableName:
-    Description: "Running Streams DynamoDB Table Name"
-    Value: !Ref RunningStreamsTable
-    Export:
-      Name: !Sub "${AWS::StackName}-RunningStreamsTable"
+    RunningStreamsTableName:
+        Description: "Running Streams DynamoDB Table Name"
+        Value: !Ref RunningStreamsTable
+        Export:
+            Name: !Sub "${AWS::StackName}-RunningStreamsTable"
 
-
-
-  UserDeployEC2WorkflowArn:
-    Description: "User Deploy EC2 Step Function ARN"
-    Value: !Ref UserDeployEC2Workflow
+    UserDeployEC2WorkflowArn:
+        Description: "User Deploy EC2 Step Function ARN"
+        Value: !Ref UserDeployEC2Workflow

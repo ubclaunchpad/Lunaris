@@ -1,0 +1,10 @@
+build/
+dist/
+coverage/
+node_modules/
+
+# Files without parsers
+.prettierignore
+Dockerfile
+**/Dockerfile
+*.dockerignore

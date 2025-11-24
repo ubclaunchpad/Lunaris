@@ -1,103 +1,103 @@
 {
-  "Comment": "UserTerminateEC2 Step Function",
-  "StartAt": "CheckRunningStreams",
-  "States": {
-    "CheckRunningStreams": {
-      "Type": "Task",
-      "Resource": "arn:aws:states:::lambda:invoke",
-      "Parameters": {
-        "FunctionName": "${CheckRunningStreamsArn}",
-        "Payload.$": "$"
-      },
-      "ResultPath": "$.checkRunningStreamsResult",
-      "Next": "CheckIfValidStream",
-      "Catch": [
-        {
-          "ErrorEquals": ["MissingTableNameEnv"],
-          "Next": "HandleMissingTableName"
+    "Comment": "UserTerminateEC2 Step Function",
+    "StartAt": "CheckRunningStreams",
+    "States": {
+        "CheckRunningStreams": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "Parameters": {
+                "FunctionName": "${CheckRunningStreamsArn}",
+                "Payload.$": "$"
+            },
+            "ResultPath": "$.checkRunningStreamsResult",
+            "Next": "CheckIfValidStream",
+            "Catch": [
+                {
+                    "ErrorEquals": ["MissingTableNameEnv"],
+                    "Next": "HandleMissingTableName"
+                },
+                {
+                    "ErrorEquals": ["States.TaskFailed"],
+                    "Next": "HandleDatabaseError"
+                }
+            ]
         },
-        {
-          "ErrorEquals": ["States.TaskFailed"],
-          "Next": "HandleDatabaseError"
-        }
-      ]
-    },
-    "CheckIfValidStream": {
-      "Type": "Choice",
-      "Choices": [
-        {
-          "Variable": "$.checkRunningStreamsResult.Payload.valid",
-          "BooleanEquals": true,
-          "Next": "TerminateEC2"
-        }
-      ],
-      "Default": "InvalidStreamError"
-    },
-    "TerminateEC2": {
-      "Type": "Task",
-      "Resource": "arn:aws:states:::lambda:invoke",
-      "Parameters": {
-        "FunctionName": "${TerminateEC2Arn}",
-        "Payload": {
-          "userId.$": "$.userId"
-        }
-      },
-      "ResultPath": "$.terminateResult",
-      "Next": "UpdateRunningStreams",
-      "Catch": [
-        {
-          "ErrorEquals": ["States.TaskFailed"],
-          "Next": "HandleFailedTermination"
-        }
-      ]
-    },
-    "UpdateRunningStreams": {
-      "Type": "Task",
-      "Resource": "arn:aws:states:::lambda:invoke",
-      "Parameters": {
-        "FunctionName": "${UpdateRunningStreamsArn}",
-        "Payload": {
-          "userId.$": "$.userId",
-          "sessionId.$": "$.checkRunningStreamsResult.Payload.sessionId",
-          "instanceArn.$": "$.checkRunningStreamsResult.Payload.instanceArn",
-          "running": false
-        }
-      },
-      "ResultPath": "$.updateResult",
-      "Next": "Success",
-      "Catch": [
-        {
-          "ErrorEquals": ["MissingTableNameEnv"],
-          "Next": "HandleMissingTableName"
+        "CheckIfValidStream": {
+            "Type": "Choice",
+            "Choices": [
+                {
+                    "Variable": "$.checkRunningStreamsResult.Payload.valid",
+                    "BooleanEquals": true,
+                    "Next": "TerminateEC2"
+                }
+            ],
+            "Default": "InvalidStreamError"
         },
-        {
-          "ErrorEquals": ["States.TaskFailed"],
-          "Next": "HandleDatabaseError"
+        "TerminateEC2": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "Parameters": {
+                "FunctionName": "${TerminateEC2Arn}",
+                "Payload": {
+                    "userId.$": "$.userId"
+                }
+            },
+            "ResultPath": "$.terminateResult",
+            "Next": "UpdateRunningStreams",
+            "Catch": [
+                {
+                    "ErrorEquals": ["States.TaskFailed"],
+                    "Next": "HandleFailedTermination"
+                }
+            ]
+        },
+        "UpdateRunningStreams": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "Parameters": {
+                "FunctionName": "${UpdateRunningStreamsArn}",
+                "Payload": {
+                    "userId.$": "$.userId",
+                    "sessionId.$": "$.checkRunningStreamsResult.Payload.sessionId",
+                    "instanceArn.$": "$.checkRunningStreamsResult.Payload.instanceArn",
+                    "running": false
+                }
+            },
+            "ResultPath": "$.updateResult",
+            "Next": "Success",
+            "Catch": [
+                {
+                    "ErrorEquals": ["MissingTableNameEnv"],
+                    "Next": "HandleMissingTableName"
+                },
+                {
+                    "ErrorEquals": ["States.TaskFailed"],
+                    "Next": "HandleDatabaseError"
+                }
+            ]
+        },
+        "InvalidStreamError": {
+            "Type": "Fail",
+            "Cause": "No valid running stream found for user",
+            "Error": "InvalidStreamError"
+        },
+        "HandleMissingTableName": {
+            "Type": "Fail",
+            "Cause": "RUNNING_STREAMS_TABLE_NAME environment variable was not set",
+            "Error": "MissingTableNameEnv"
+        },
+        "HandleDatabaseError": {
+            "Type": "Fail",
+            "Cause": "Error occurred while accessing the running streams database",
+            "Error": "DatabaseError"
+        },
+        "HandleFailedTermination": {
+            "Type": "Fail",
+            "Cause": "Failed to terminate EC2 instance",
+            "Error": "TerminationFailedError"
+        },
+        "Success": {
+            "Type": "Succeed"
         }
-      ]
-    },
-    "InvalidStreamError": {
-      "Type": "Fail",
-      "Cause": "No valid running stream found for user",
-      "Error": "InvalidStreamError"
-    },
-    "HandleMissingTableName": {
-      "Type": "Fail",
-      "Cause": "RUNNING_STREAMS_TABLE_NAME environment variable was not set",
-      "Error": "MissingTableNameEnv"
-    },
-    "HandleDatabaseError": {
-      "Type": "Fail",
-      "Cause": "Error occurred while accessing the running streams database",
-      "Error": "DatabaseError"
-    },
-    "HandleFailedTermination": {
-      "Type": "Fail",
-      "Cause": "Failed to terminate EC2 instance",
-      "Error": "TerminationFailedError"
-    },
-    "Success": {
-      "Type": "Succeed"
     }
-  }
 }

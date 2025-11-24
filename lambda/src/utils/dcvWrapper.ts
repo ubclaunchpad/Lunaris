@@ -3,23 +3,22 @@ import SSMWrapper from "./ssmWrapper";
 
 class DCVWrapper {
     private ssm: SSMWrapper;
-    private ec2: EC2Wrapper
-    private instanceId: string
-    private userId: string
+    private ec2: EC2Wrapper;
+    private instanceId: string;
+    private userId: string;
 
     constructor(instanceId: string, userId: string) {
         this.ssm = new SSMWrapper();
         this.ec2 = new EC2Wrapper();
         this.instanceId = instanceId;
-        this.userId = userId
-
+        this.userId = userId;
     }
 
     async getDCVSession(): Promise<string> {
         try {
-            const instance = await this.ec2.getInstance(this.instanceId)
+            const instance = await this.ec2.getInstance(this.instanceId);
 
-            const dcvTag = instance.Tags?.find(tag => tag.Key === "dcvConfigured");
+            const dcvTag = instance.Tags?.find((tag) => tag.Key === "dcvConfigured");
             const isDCVConfigured = dcvTag?.Value === "true";
 
             if (!isDCVConfigured) {
@@ -29,17 +28,17 @@ class DCVWrapper {
             // call start dcv session
             const url = await this.createDCVSession();
 
-            return url
+            return url;
         } catch (error) {
-            console.log("unable to install or start DCV streaming instance", error)
-            throw error
+            console.log("unable to install or start DCV streaming instance", error);
+            throw error;
         }
     }
 
     async installDCV(): Promise<void> {
         try {
             const commandId = await this.ssm.runInstall({
-                instanceId: this.instanceId
+                instanceId: this.instanceId,
             });
 
             console.log(`DCV installation started. Command ID: ${commandId}`);
@@ -52,11 +51,10 @@ class DCVWrapper {
 
             // set tag dcvConfigured to true
             await this.ec2.modifyInstanceTag(this.instanceId, "dcvConfigured", "true");
-        } catch (err: any) {
-            console.error("DCV Install failed", err)
-            throw err
+        } catch (err: unknown) {
+            console.error("DCV Install failed", err);
+            throw err;
         }
-
     }
 
     async createDCVSession(): Promise<string> {
@@ -68,7 +66,7 @@ class DCVWrapper {
             const commandId = await this.ssm.runCreateSession({
                 instanceId: this.instanceId,
                 sessionName: sessionName,
-                sessionOwner: 'Administrator'
+                sessionOwner: "Administrator",
             });
 
             console.log(`DCV session creation started. Command ID: ${commandId}`);
@@ -84,34 +82,34 @@ class DCVWrapper {
 
             return url;
         } catch (error) {
-            console.log(`DCV installation failed: ${error}`)
-            throw error
+            console.log(`DCV installation failed: ${error}`);
+            throw error;
         }
     }
 
     async getStreamingUrl(): Promise<string> {
         try {
-            const instance = await this.ec2.getInstance(this.instanceId)
-            const publicIp = instance.PublicIpAddress
+            const instance = await this.ec2.getInstance(this.instanceId);
+            const publicIp = instance.PublicIpAddress;
             if (!publicIp) {
-                throw new Error('Could not get public Ip')
+                throw new Error("Could not get public Ip");
             }
 
             // session name must match what createDCVSession created
-            const sessionName = `user-${this.userId}-session`
+            const sessionName = `user-${this.userId}-session`;
 
             // construct and return URL (encode session id)
-            const url = `https://${publicIp}:8443?session-id=${encodeURIComponent(sessionName)}`
-            return url
+            const url = `https://${publicIp}:8443?session-id=${encodeURIComponent(sessionName)}`;
+            return url;
         } catch (error) {
-            console.log("could not get streaming url", error)
-            throw error
+            console.log("could not get streaming url", error);
+            throw error;
         }
     }
 
     private async waitForSSMCommand(
         commandId: string,
-        maxWaitSeconds: number = 600
+        maxWaitSeconds: number = 600,
     ): Promise<void> {
         const startTime = Date.now();
         const maxWaitMs = maxWaitSeconds * 1000;
@@ -124,25 +122,24 @@ class DCVWrapper {
 
                 console.log(`Command ${commandId} status: ${status}`);
 
-                if (status === 'Success') {
+                if (status === "Success") {
                     return;
                 }
 
-                if (status === 'Failed' || status === 'Cancelled' || status === 'TimedOut') {
+                if (status === "Failed" || status === "Cancelled" || status === "TimedOut") {
                     throw new Error(`SSM command failed with status: ${status}`);
                 }
 
                 // check timeout
                 if (Date.now() - startTime > maxWaitMs) {
                     throw new Error(
-                        `Timeout waiting for SSM command ${commandId} (${maxWaitSeconds}s)`
+                        `Timeout waiting for SSM command ${commandId} (${maxWaitSeconds}s)`,
                     );
                 }
 
                 // wait before next poll
-                await new Promise(resolve => setTimeout(resolve, pollInterval));
-
-            } catch (err: any) {
+                await new Promise((resolve) => setTimeout(resolve, pollInterval));
+            } catch (err: unknown) {
                 console.error(`Error waiting for SSM command:`, err);
                 throw err;
             }

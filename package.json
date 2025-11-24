@@ -9,6 +9,24 @@
         "frontend"
     ],
     "scripts": {
+        "dev:start": "npm run docker:build && npm run docker:start && sleep 3 && npm run db:create-tables",
+        "dev:stop": "npm run docker:stop",
+        "lint": "eslint .",
+        "lint:fix": "eslint . --fix",
+        "lint:frontend": "eslint frontend",
+        "lint:frontend:fix": "eslint frontend --fix",
+        "lint:lambda": "eslint lambda",
+        "lint:lambda:fix": "eslint lambda --fix",
+        "lint:cdk": "eslint cdk",
+        "lint:cdk:fix": "eslint cdk --fix",
+        "prettier": "prettier . --check",
+        "prettier:fix": "prettier . --write",
+        "prettier:frontend": "prettier frontend --check",
+        "prettier:frontend:fix": "prettier frontend --write",
+        "prettier:lambda": "prettier lambda --check",
+        "prettier:lambda:fix": "prettier lambda --write",
+        "prettier:cdk": "prettier cdk --check",
+        "prettier:cdk:fix": "prettier cdk --write",
         "docker:build": "docker-compose build",
         "docker:start": "docker-compose up -d",
         "docker:stop": "docker-compose down",
@@ -17,6 +35,10 @@
         "docker:test": "npm run docker:test:lambda",
         "docker:test:lambda": "cd lambda && npm test",
         "docker:clean": "docker-compose down -v && docker system prune -f",
+        "db:start": "docker-compose up -d dynamodb",
+        "db:stop": "docker-compose stop dynamodb",
+        "db:create-tables": "tsx scripts/init-dynamodb-tables.ts",
+        "db:reset": "npm run db:stop && docker-compose rm -f dynamodb && npm run db:start && sleep 2 && npm run db:create-tables",
         "build:all": "npm run build --workspaces --if-present",
         "test:all": "npm test --workspaces --if-present",
         "install:all": "npm install --workspaces"
@@ -28,5 +50,19 @@
     "repository": {
         "type": "git",
         "url": "https://github.com/ubclaunchpad/lunaris"
+    },
+    "devDependencies": {
+        "@aws-sdk/client-dynamodb": "^3.917.0",
+        "@eslint/js": "^9.39.1",
+        "@types/jest": "^30.0.0",
+        "eslint": "^9.39.1",
+        "eslint-config-next": "^16.0.1",
+        "eslint-config-prettier": "^10.1.8",
+        "eslint-plugin-awscdk": "^4.0.4",
+        "eslint-plugin-react": "^7.37.5",
+        "globals": "^16.5.0",
+        "prettier": "^3.6.2",
+        "tsx": "^4.19.2",
+        "typescript-eslint": "^8.46.3"
     }
 }
