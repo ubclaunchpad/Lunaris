@@ -1,6 +1,6 @@
 import { Construct } from "constructs";
 import {
-    type ITable,
+    ITable,
     Table,
     AttributeType,
     BillingMode,
@@ -9,8 +9,8 @@ import {
 import { RemovalPolicy } from "aws-cdk-lib";
 
 export class DynamoDbTables extends Construct {
-    public readonly runningStreamsTable: Table;
-    public readonly runningInstancesTable: Table;
+    public readonly runningStreamsTable: ITable;
+    public readonly runningInstancesTable: ITable;
 
     constructor(scope: Construct, id: string) {
         super(scope, id);
@@ -27,7 +27,7 @@ export class DynamoDbTables extends Construct {
      * - createdAt (ISO 8601 formatted date string)
      * - updatedAt (ISO 8601 formatted date string)
      */
-    setUpRunningStreamsTable(): Table {
+    setUpRunningStreamsTable(): ITable {
         const table = new Table(this, "RunningStreams", {
             partitionKey: { name: "instanceArn", type: AttributeType.STRING },
             billingMode: BillingMode.PAY_PER_REQUEST,
@@ -49,7 +49,7 @@ export class DynamoDbTables extends Construct {
      *         status, region, instanceType, lastModifiedTime, userId,
      *         executionArn (optional - stores Step Function execution ARN for termination workflows)
      */
-    setupRunningInstances(): Table {
+    setupRunningInstances(): ITable {
         const table = new Table(this, "RunningInstances", {
             partitionKey: { name: "instanceId", type: AttributeType.STRING },
             pointInTimeRecoverySpecification: {
