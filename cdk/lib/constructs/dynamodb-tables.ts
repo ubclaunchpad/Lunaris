@@ -9,8 +9,8 @@ import {
 import { RemovalPolicy } from "aws-cdk-lib";
 
 export class DynamoDbTables extends Construct {
-    private readonly runningStreamsTable: ITable;
-    private readonly runningInstancesTable: ITable;
+    public readonly runningStreamsTable: Table;
+    public readonly runningInstancesTable: Table;
 
     constructor(scope: Construct, id: string) {
         super(scope, id);
@@ -27,19 +27,29 @@ export class DynamoDbTables extends Construct {
      * - createdAt (ISO 8601 formatted date string)
      * - updatedAt (ISO 8601 formatted date string)
      */
-    private setUpRunningStreamsTable(): ITable {
-        return new Table(this, "RunningStreams", {
+    setUpRunningStreamsTable(): Table {
+        const table = new Table(this, "RunningStreams", {
             partitionKey: { name: "instanceArn", type: AttributeType.STRING },
             billingMode: BillingMode.PAY_PER_REQUEST,
             removalPolicy: RemovalPolicy.DESTROY, // Use RETAIN for production
         });
+
+        table.addGlobalSecondaryIndex({
+            indexName: "UserIdIndex",
+            partitionKey: { name: "userId", type: AttributeType.STRING },
+            sortKey: { name: "createdAt", type: AttributeType.STRING },
+            projectionType: ProjectionType.ALL,
+        });
+
+        return table;
     }
 
     /**
      * Schema: instanceId (PK), instanceArn, ebsVolumes (list), creationTime,
-     *         status, region, instanceType, lastModifiedTime
+     *         status, region, instanceType, lastModifiedTime, userId,
+     *         executionArn (optional - stores Step Function execution ARN for termination workflows)
      */
-    private setupRunningInstances(): ITable {
+    setupRunningInstances(): Table {
         const table = new Table(this, "RunningInstances", {
             partitionKey: { name: "instanceId", type: AttributeType.STRING },
             pointInTimeRecoverySpecification: {
@@ -50,6 +60,10 @@ export class DynamoDbTables extends Construct {
             removalPolicy: RemovalPolicy.DESTROY, // Use RETAIN for production
         });
 
+        // TODO future: add autoscaling group
+        // TODO: or add grantX to specific lambda functions
+
+        //add global secondary index for status and creation time
         table.addGlobalSecondaryIndex({
             indexName: "StatusCreationTimeIndex",
             partitionKey: { name: "status", type: AttributeType.STRING },
@@ -57,20 +71,14 @@ export class DynamoDbTables extends Construct {
             projectionType: ProjectionType.ALL,
         });
 
+        //add global secondary index for userId
         table.addGlobalSecondaryIndex({
             indexName: "UserIdIndex",
             partitionKey: { name: "userId", type: AttributeType.STRING },
+            sortKey: { name: "creationTime", type: AttributeType.STRING },
             projectionType: ProjectionType.ALL,
         });
 
         return table;
-    }
-
-    public getRunningInstanceTable() {
-        return this.runningInstancesTable;
-    }
-
-    public getRunningStreamsTable() {
-        return this.runningStreamsTable;
     }
 }

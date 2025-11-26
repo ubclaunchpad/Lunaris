@@ -53,8 +53,8 @@
     },
     "devDependencies": {
         "@aws-sdk/client-dynamodb": "^3.917.0",
-        "tsx": "^4.19.2",
         "@eslint/js": "^9.39.1",
+        "@jest/globals": "^29.7.0",
         "eslint": "^9.39.1",
         "eslint-config-next": "^16.0.1",
         "eslint-config-prettier": "^10.1.8",
@@ -62,6 +62,7 @@
         "eslint-plugin-react": "^7.37.5",
         "globals": "^16.5.0",
         "prettier": "^3.6.2",
+        "tsx": "^4.19.2",
         "typescript-eslint": "^8.46.3"
     }
 }
