@@ -35,7 +35,12 @@ describe("UserTerminateEC2Workflow Integration", () => {
         // Step 1: CheckRunningStreams
         const checkResult = await checkRunningStreamsHandler({ userId });
 
-        if (!checkResult.valid || !hasActiveStream) {
+        if (
+            !checkResult.valid ||
+            !hasActiveStream ||
+            !checkResult.sessionId ||
+            !checkResult.instanceArn
+        ) {
             return { success: false, error: "InvalidStreamError" };
         }
 
@@ -47,8 +52,9 @@ describe("UserTerminateEC2Workflow Integration", () => {
         // Step 3: UpdateRunningStreams
         const updateResult = await updateRunningStreamsHandler({
             userId,
-            sessionId: checkResult.sessionId!,
-            instanceArn: checkResult.instanceArn!,
+            sessionId: checkResult.sessionId,
+            instanceArn: checkResult.instanceArn,
+            running: false,
         });
 
         return {

@@ -8,31 +8,33 @@ export const handler = async (
     }
 
     const db = new DynamoDBWrapper(process.env.RUNNING_STREAMS_TABLE_NAME);
-    const { instanceArn } = event;
+    const payload = {
+        ...event,
+        updatedAt: new Date().toISOString(),
+    };
 
-    if (!instanceArn) {
-        throw new Error("Instance ARN is required");
-    }
+    const updateConfig = {
+        UpdateExpression: `
+      SET
+        running = :running,
+        updatedAt = :updatedAt
+    `,
+        ExpressionAttributeValues: {
+            ":running": false,
+            ":updatedAt": payload.updatedAt,
+        },
+    };
 
-    try {
-        console.log(`Deleting stream record for instance: ${instanceArn}`);
+    await db.updateItem({ userId: event.userId }, updateConfig);
 
-        await db.deleteItem({ instanceArn });
-
-        console.log(`Successfully deleted stream record for ${instanceArn}`);
-        return { success: true };
-    } catch (error) {
-        throw new Error(
-            `DatabaseError: ${error instanceof Error ? error.message : "Unknown error"}`,
-        );
-    }
+    return { success: true };
 };
 
 type UpdateRunningStreamsEvent = {
     userId: string;
+    sessionId: string;
     instanceArn: string;
-    previousState: string;
-    currentState: string;
+    running: boolean;
 };
 
 type UpdateRunningStreamsResult = {
