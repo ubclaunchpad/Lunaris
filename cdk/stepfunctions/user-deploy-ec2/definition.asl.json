@@ -1,102 +1,104 @@
 {
-  "Comment": "UserDeployEC2 Step Function",
-  "StartAt": "CheckRunningStreams",
-  "States": {
-    "CheckRunningStreams": {
-      "Type": "Task",
-      "Resource": "arn:aws:states:::lambda:invoke",
-      "Parameters": {
-        "FunctionName": "${CheckRunningStreamsArn}",
-        "Payload.$": "$"
-      },
-      "ResultPath": "$.checkRunningStreamsResult",
-      "Next": "CheckIfValidStream",
-      "Catch": [
-        {
-          "ErrorEquals": ["MissingTableNameEnv"],
-          "Next": "HandleMissingTableName"
+    "Comment": "UserDeployEC2 Step Function",
+    "StartAt": "CheckRunningStreams",
+    "States": {
+        "CheckRunningStreams": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "Parameters": {
+                "FunctionName": "${CheckRunningStreamsArn}",
+                "Payload.$": "$"
+            },
+            "ResultPath": "$.checkRunningStreamsResult",
+            "Next": "CheckIfValidStream",
+            "Catch": [
+                {
+                    "ErrorEquals": ["MissingTableNameEnv"],
+                    "Next": "HandleMissingTableName"
+                },
+                {
+                    "ErrorEquals": ["States.TaskFailed"],
+                    "Next": "HandleDatabaseError"
+                }
+            ]
         },
-        {
-          "ErrorEquals": ["States.TaskFailed"],
-          "Next": "HandleDatabaseError"
-        }
-      ]
-    },
-    "CheckIfValidStream": {
-      "Type": "Choice",
-      "Choices": [
-        {
-          "Variable": "$.checkRunningStreamsResult.Payload.streamsRunning",
-          "BooleanEquals": false,
-          "Next": "DeployEC2"
-        }
-      ],
-      "Default": "HandleStreamsRunningError"
-    },
-    "DeployEC2": {
-      "Type": "Task",
-      "Resource": "arn:aws:states:::lambda:invoke",
-      "Parameters": {
-        "FunctionName": "${DeployEC2Arn}",
-        "Payload": {
-          "userId.$": "$.userId"
-        }
-      },
-      "ResultPath": "$.deployResult",
-      "Next": "UpdateRunningStreams",
-      "Catch": [
-        {
-          "ErrorEquals": ["States.TaskFailed"],
-          "Next": "HandleFailedDeployment"
-        }
-      ]
-    },
-    "UpdateRunningStreams": {
-      "Type": "Task",
-      "Resource": "arn:aws:states:::lambda:invoke",
-      "Parameters": {
-        "FunctionName": "${UpdateRunningStreamsArn}",
-        "Payload": {
-          "userId.$": "$.userId",
-          "instanceArn.$": "$.deployResult.Payload.instanceArn",
-          "running": true
-        }
-      },
-      "ResultPath": "$.updateResult",
-      "Next": "Success",
-      "Catch": [
-        {
-          "ErrorEquals": ["MissingTableNameEnv"],
-          "Next": "HandleMissingTableName"
+        "CheckIfValidStream": {
+            "Type": "Choice",
+            "Choices": [
+                {
+                    "Variable": "$.checkRunningStreamsResult.Payload.streamsRunning",
+                    "BooleanEquals": false,
+                    "Next": "DeployEC2"
+                }
+            ],
+            "Default": "HandleStreamsRunningError"
         },
-        {
-          "ErrorEquals": ["States.TaskFailed"],
-          "Next": "HandleDatabaseError"
+        "DeployEC2": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "Parameters": {
+                "FunctionName": "${DeployEC2Arn}",
+                "Payload": {
+                    "userId.$": "$.userId",
+                    "instanceType.$": "$.instanceType",
+                    "amiId.$": "$.amiId"
+                }
+            },
+            "ResultPath": "$.deployResult",
+            "Next": "UpdateRunningStreams",
+            "Catch": [
+                {
+                    "ErrorEquals": ["States.TaskFailed"],
+                    "Next": "HandleFailedDeployment"
+                }
+            ]
+        },
+        "UpdateRunningStreams": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "Parameters": {
+                "FunctionName": "${UpdateRunningStreamsArn}",
+                "Payload": {
+                    "userId.$": "$.userId",
+                    "instanceArn.$": "$.deployResult.Payload.instanceArn",
+                    "running": true
+                }
+            },
+            "ResultPath": "$.updateResult",
+            "Next": "Success",
+            "Catch": [
+                {
+                    "ErrorEquals": ["MissingTableNameEnv"],
+                    "Next": "HandleMissingTableName"
+                },
+                {
+                    "ErrorEquals": ["States.TaskFailed"],
+                    "Next": "HandleDatabaseError"
+                }
+            ]
+        },
+        "Success": {
+            "Type": "Succeed"
+        },
+        "HandleMissingTableName": {
+            "Type": "Fail",
+            "Cause": "RUNNING_STREAMS_TABLE_NAME environment variable was not set",
+            "Error": "MissingTableNameEnv"
+        },
+        "HandleDatabaseError": {
+            "Type": "Fail",
+            "Cause": "Error occurred while accessing the running streams database",
+            "Error": "DatabaseError"
+        },
+        "HandleStreamsRunningError": {
+            "Type": "Fail",
+            "Cause": "Valid running stream found for user",
+            "Error": "StreamsRunningError"
+        },
+        "HandleFailedDeployment": {
+            "Type": "Fail",
+            "Cause": "Failed to deploy EC2 instance",
+            "Error": "DeploymentFailedError"
         }
-      ]
-    },
-    "Success": {
-      "Type": "Succeed"
-    },
-    "HandleMissingTableName": {
-      "Type": "Fail",
-      "Cause": "RUNNING_STREAMS_TABLE_NAME environment variable was not set",
-      "Error": "MissingTableNameEnv"
-    },
-    "HandleDatabaseError": {
-      "Type": "Fail",
-      "Cause": "Error occurred while accessing the running streams database",
-      "Error": "DatabaseError"
-    },
-    "HandleStreamsRunningError": {
-      "Type": "Fail",
-      "Cause": "Valid running stream found for user",
-      "Error": "StreamsRunningError"
-    },
-    "HandleFailedDeployment": {
-      "Type": "Fail",
-      "Cause": "Failed to deploy EC2 instance",
-      "Error": "DeploymentFailedError"
     }
-  }
 }

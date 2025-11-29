@@ -1,23 +1,31 @@
-ARG NODE_VERSION=24.4.1
-FROM node:${NODE_VERSION}-alpine AS base
+ARG NODE_VERSION=22
+FROM node:${NODE_VERSION} AS base
 
 WORKDIR /app
 
-FROM base AS deps
+ARG NPM_VERSION=11
+RUN npm install -g npm@${NPM_VERSION}
 
-RUN --mount=type=bind,source=package.json,target=package.json \
-    --mount=type=bind,source=package-lock.json,target=package-lock.json \
-    --mount=type=cache,target=/root/.npm \
-    npm ci --omit=dev
+FROM base AS deps_local
 
-FROM deps AS build
+WORKDIR /app/frontend
 
-RUN --mount=type=bind,source=package.json,target=package.json \
-    --mount=type=bind,source=package-lock.json,target=package-lock.json \
-    --mount=type=cache,target=/root/.npm \
+COPY frontend/package.json .
+COPY frontend/package-lock.json .
+
+RUN --mount=type=cache,target=/root/.npm \
     npm ci
 
-COPY . .
+FROM base AS build
+
+WORKDIR /app/frontend
+
+COPY --from=deps_local /app/frontend/node_modules ./node_modules
+
+COPY frontend/package.json .
+COPY frontend/package-lock.json .
+COPY frontend/ ./
+
 RUN npm run build
 
 FROM base AS final
@@ -26,10 +34,12 @@ ENV NODE_ENV=production
 
 USER node
 
-COPY package.json .
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=build /app/.next ./.next
-COPY --from=build /app/public ./public
+WORKDIR /app/frontend
+
+COPY --chown=node:node frontend/package.json .
+COPY --chown=node:node --from=build /app/frontend/node_modules ./node_modules
+COPY --chown=node:node --from=build /app/frontend/.next ./.next
+COPY --chown=node:node --from=build /app/frontend/public ./public
 
 EXPOSE 3000
 CMD ["npm", "start"]

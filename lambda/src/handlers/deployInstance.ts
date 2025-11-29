@@ -1,13 +1,29 @@
-import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { EC2Client, RunInstancesCommand, _InstanceType } from '@aws-sdk/client-ec2';
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
+import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
+import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { DynamoDBDocumentClient, PutCommand } from "@aws-sdk/lib-dynamodb";
 
-const ec2Client = new EC2Client({});
-const dynamoClient = new DynamoDBClient({});
+import { SFNClient, StartExecutionCommand, StartExecutionCommandOutput } from "@aws-sdk/client-sfn";
+import { SFNClientConfig } from "@aws-sdk/client-sfn";
+import { DynamoDBClientConfig } from "@aws-sdk/client-dynamodb";
+
+// Configure clients to use local endpoints when available (for local testing)
+const sfnClientConfig: Partial<SFNClientConfig> = {};
+const dynamoClientConfig: Partial<DynamoDBClientConfig> = {};
+
+if (process.env.STEPFUNCTIONS_ENDPOINT) {
+    sfnClientConfig.endpoint = process.env.STEPFUNCTIONS_ENDPOINT;
+}
+
+if (process.env.DYNAMODB_ENDPOINT) {
+    dynamoClientConfig.endpoint = process.env.DYNAMODB_ENDPOINT;
+}
+
+const sfnClient = new SFNClient(sfnClientConfig);
+const dynamoClient = new DynamoDBClient(dynamoClientConfig);
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
 
-const RUNNING_INSTANCES_TABLE = process.env.RUNNING_INSTANCES_TABLE || '';
+const RUNNING_INSTANCES_TABLE = process.env.RUNNING_INSTANCES_TABLE || "";
+const STEP_FUNCTION_ARN = process.env.USER_DEPLOY_EC2_WORKFLOW_ARN || "";
 
 interface DeployInstanceRequest {
     userId: string;
@@ -15,90 +31,134 @@ interface DeployInstanceRequest {
     amiId?: string;
 }
 
-export const handler = async (event: APIGatewayProxyEvent, context: any): Promise<APIGatewayProxyResult> => {
+export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     try {
-        const body: DeployInstanceRequest = JSON.parse(event.body || '{}');
-        const { userId, instanceType = 't3.micro', amiId } = body;
+        const body: DeployInstanceRequest = JSON.parse(event.body || "{}");
+        const { userId, instanceType = "t3.micro", amiId } = body;
+
+        const runningInstancesTable = process.env.RUNNING_INSTANCES_TABLE;
+        if (!runningInstancesTable) {
+            throw new Error("MissingRunningInstancesTable");
+        }
 
         if (!userId) {
             return {
                 statusCode: 400,
-                body: JSON.stringify({ message: 'User ID is required' })
+                body: JSON.stringify({ message: "User ID is required" }),
             };
         }
 
         if (!amiId) {
             return {
                 statusCode: 400,
-                body: JSON.stringify({ message: 'AMI ID is required' })
+                body: JSON.stringify({ message: "AMI ID is required" }),
             };
         }
 
-        // Start EC2 instance
-        const runInstancesCommand = new RunInstancesCommand({
-            ImageId: amiId,
-            InstanceType: instanceType as _InstanceType,
-            MinCount: 1,
-            MaxCount: 1,
-            TagSpecifications: [
-                {
-                    ResourceType: 'instance',
-                    Tags: [
-                        { Key: 'UserId', Value: userId },
-                        { Key: 'ManagedBy', Value: 'Lunaris' }
-                    ]
-                }
-            ]
-        });
+        // Start the UserDeployEC2 Step Function
+        if (!STEP_FUNCTION_ARN) {
+            return {
+                statusCode: 500,
+                body: JSON.stringify({ message: "UserDeployEC2 Step Function ARN is not set" }),
+            };
+        }
 
-        const runInstancesResponse = await ec2Client.send(runInstancesCommand);
-        const instance = runInstancesResponse.Instances?.[0];
+        const stepFunctionInput = {
+            userId: userId,
+            instanceType: instanceType,
+            amiId: amiId,
+        };
 
-        if (!instance || !instance.InstanceId) {
-            throw new Error('Failed to create EC2 instance');
+        const executionName = `${userId}-${Date.now()}`;
+
+        const isLocalTesting =
+            process.env.NODE_ENV === "local" || process.env.STEPFUNCTIONS_ENDPOINT;
+        let executionResponse: StartExecutionCommandOutput;
+
+        if (isLocalTesting && process.env.STEPFUNCTIONS_ENDPOINT) {
+            try {
+                const startExecutionCommand = new StartExecutionCommand({
+                    stateMachineArn: STEP_FUNCTION_ARN,
+                    input: JSON.stringify(stepFunctionInput),
+                    name: executionName,
+                });
+                executionResponse = await sfnClient.send(startExecutionCommand);
+                console.log("Step Function execution started via local endpoint");
+            } catch (error) {
+                console.log(
+                    "Local Step Functions endpoint not available, using mock execution ARN",
+                );
+                const mockExecutionArn = `arn:aws:states:us-east-1:123456789012:execution:UserDeployEC2Workflow:${executionName}`;
+                executionResponse = {
+                    executionArn: mockExecutionArn,
+                    startDate: new Date(),
+                    $metadata: {},
+                } as StartExecutionCommandOutput;
+            }
+        } else {
+            const startExecutionCommand = new StartExecutionCommand({
+                stateMachineArn: STEP_FUNCTION_ARN,
+                input: JSON.stringify(stepFunctionInput),
+                name: executionName,
+            });
+            executionResponse = await sfnClient.send(startExecutionCommand);
+        }
+
+        if (!executionResponse.executionArn) {
+            throw new Error("Failed to start UserDeployEC2 Step Function");
         }
 
         const now = new Date().toISOString();
 
         // Log to RunningInstances table
-        const putCommand = new PutCommand({
-            TableName: RUNNING_INSTANCES_TABLE,
-            Item: {
-                instanceId: instance.InstanceId,
-                instanceArn: instance.InstanceId && context.invokedFunctionArn
-                    ? `arn:aws:ec2:${context.invokedFunctionArn.split(':')[3]}:${context.invokedFunctionArn.split(':')[4]}:instance/${instance.InstanceId}`
-                    : '',
-                ebsVolumes: instance.BlockDeviceMappings?.map(bdm => bdm.Ebs?.VolumeId).filter((id): id is string => Boolean(id)) || [],
-                creationTime: now,
-                status: instance.State?.Name || 'pending',
-                region: instance.Placement?.AvailabilityZone || 'unknown',
-                instanceType: instance.InstanceType || instanceType,
-                lastModifiedTime: now,
-                userId: userId
+        if (RUNNING_INSTANCES_TABLE) {
+            try {
+                const putCommand = new PutCommand({
+                    TableName: RUNNING_INSTANCES_TABLE,
+                    Item: {
+                        userId: userId,
+                        executionArn: executionResponse.executionArn,
+                        status: "RUNNING",
+                        createdAt: now,
+                        instanceType: instanceType,
+                        amiId: amiId,
+                    },
+                });
+
+                await docClient.send(putCommand);
+                console.log(`Stored execution ARN in DynamoDB: ${executionResponse.executionArn}`);
+            } catch (dbError) {
+                if (isLocalTesting) {
+                    console.warn(
+                        "DynamoDB not available in local testing, skipping storage:",
+                        dbError,
+                    );
+                } else {
+                    throw dbError;
+                }
             }
-        });
+        }
 
-        await docClient.send(putCommand);
-
-        console.log(`Successfully deployed instance ${instance.InstanceId} for user ${userId}`);
+        console.log(
+            `Started Step Function execution ${executionResponse.executionArn} for user ${userId}`,
+        );
 
         return {
             statusCode: 200,
             body: JSON.stringify({
-                message: 'Instance deployed successfully',
-                instanceId: instance.InstanceId,
-                status: instance.State?.Name
-            })
+                status: "success",
+                message: "Deployment workflow started successfully",
+                statusCode: 200,
+            }),
         };
-
     } catch (error) {
-        console.error('Error deploying instance:', error);
+        console.error("Error deploying instance:", error);
         return {
             statusCode: 500,
             body: JSON.stringify({
-                message: 'Failed to deploy instance',
-                error: error instanceof Error ? error.message : 'Unknown error'
-            })
+                message: "Failed to deploy instance",
+                error: error instanceof Error ? error.message : "Unknown error",
+            }),
         };
     }
 };

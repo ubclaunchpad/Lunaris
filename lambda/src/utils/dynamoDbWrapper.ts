@@ -1,68 +1,119 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import {
-  DynamoDBDocumentClient,
-  GetCommand,
-  PutCommand,
-  UpdateCommand,
-  type TranslateConfig,
-  type GetCommandInput,
-  type PutCommandInput,
-  type GetCommandOutput,
-  type UpdateCommandInput,
+    DynamoDBDocumentClient,
+    GetCommand,
+    PutCommand,
+    UpdateCommand,
+    DeleteCommand,
+    QueryCommand,
+    type TranslateConfig,
+    type GetCommandInput,
+    type PutCommandInput,
+    type GetCommandOutput,
+    type UpdateCommandInput,
+    type DeleteCommandInput,
+    type QueryCommandInput,
 } from "@aws-sdk/lib-dynamodb";
 
 class DynamoDBWrapper {
-  private client: DynamoDBDocumentClient;
-  private tableName: string;
+    private client: DynamoDBDocumentClient;
+    private tableName: string;
 
-  constructor(tableName: string, translateConfig?: TranslateConfig) {
-    // DynamoDBDocumentClient allows use of native JS types rather than aws AttributeValue types
-    this.client = DynamoDBDocumentClient.from(
-      new DynamoDBClient({}),
-      translateConfig
-    );
-    this.tableName = tableName;
-  }
+    constructor(tableName: string, translateConfig?: TranslateConfig) {
+        // DynamoDBDocumentClient allows use of native JS types rather than aws AttributeValue types
+        this.client = DynamoDBDocumentClient.from(new DynamoDBClient({}), translateConfig);
+        this.tableName = tableName;
+    }
 
-  async getItem(
-    key: GetCommandInput["Key"],
-    options?: Partial<GetCommandInput>
-  ): Promise<GetCommandOutput["Item"] | null> {
-    const inputConfig: GetCommandInput = {
-      ...(options ?? {}),
-      TableName: this.tableName,
-      Key: key,
-    };
+    async getItem(
+        key: GetCommandInput["Key"],
+        options?: Partial<GetCommandInput>,
+    ): Promise<GetCommandOutput["Item"] | null> {
+        const inputConfig: GetCommandInput = {
+            ...(options ?? {}),
+            TableName: this.tableName,
+            Key: key,
+        };
 
-    const response = await this.client.send(new GetCommand(inputConfig));
-    return response?.Item ?? null;
-  }
+        const response = await this.client.send(new GetCommand(inputConfig));
+        return response?.Item ?? null;
+    }
 
-  async putItem(
-    Item: PutCommandInput["Item"],
-    options?: Partial<PutCommandInput>
-  ) {
-    const inputConfig: PutCommandInput = {
-      ...(options ?? {}),
-      TableName: this.tableName,
-      Item,
-    };
+    async putItem(Item: PutCommandInput["Item"], options?: Partial<PutCommandInput>) {
+        const inputConfig: PutCommandInput = {
+            ...(options ?? {}),
+            TableName: this.tableName,
+            Item,
+        };
 
-    await this.client.send(new PutCommand(inputConfig));
-  }
+        await this.client.send(new PutCommand(inputConfig));
+    }
 
-  async updateItem(
-    key: UpdateCommandInput["Key"],
-    options?: Partial<UpdateCommandInput>
-  ) {
-    const inputConfig: UpdateCommandInput = {
-      ...(options ?? {}),
-      TableName: this.tableName,
-      Key: key,
-    };
+    async updateItem(key: UpdateCommandInput["Key"], options?: Partial<UpdateCommandInput>) {
+        const inputConfig: UpdateCommandInput = {
+            ...(options ?? {}),
+            TableName: this.tableName,
+            Key: key,
+        };
 
-    await this.client.send(new UpdateCommand(inputConfig));
-  }
+        await this.client.send(new UpdateCommand(inputConfig));
+    }
+
+    async deleteItem(key: DeleteCommandInput["Key"], options?: Partial<DeleteCommandInput>) {
+        const inputConfig: DeleteCommandInput = {
+            ...(options ?? {}),
+            TableName: this.tableName,
+            Key: key,
+        };
+
+        await this.client.send(new DeleteCommand(inputConfig));
+    }
+
+    async query(options: Partial<QueryCommandInput>) {
+        const inputConfig: QueryCommandInput = {
+            ...options,
+            TableName: this.tableName,
+        };
+
+        const response = await this.client.send(new QueryCommand(inputConfig));
+        return response.Items ?? [];
+    }
+
+    async queryByUserId(userId: string) {
+        return this.query({
+            IndexName: "UserIdIndex",
+            KeyConditionExpression: "userId = :userId",
+            ExpressionAttributeValues: {
+                ":userId": userId,
+            },
+        });
+    }
+
+    async queryByStatus(status: string) {
+        return this.query({
+            IndexName: "StatusCreationTimeIndex",
+            KeyConditionExpression: "#status = :status",
+            ExpressionAttributeNames: {
+                "#status": "status",
+            },
+            ExpressionAttributeValues: {
+                ":status": status,
+            },
+        });
+    }
+
+    async queryByRegion(region: string) {
+        return this.query({
+            IndexName: "RegionIndex",
+            KeyConditionExpression: "#region = :region",
+            ExpressionAttributeNames: {
+                "#region": "region",
+            },
+            ExpressionAttributeValues: {
+                ":region": region,
+            },
+        });
+    }
 }
 
 export default DynamoDBWrapper;

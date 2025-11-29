@@ -9,88 +9,111 @@ import { DynamoDbTables } from "./constructs/dynamodb-tables";
 import { CognitoUserPool } from "./constructs/cognito-user-pool";
 
 export class CdkStack extends Stack {
-  constructor(scope: Construct, id: string, props?: StackProps) {
-    super(scope, id, {
-      ...props,
-      env: {
-        account: process.env.CDK_DEFAULT_ACCOUNT,
-        region: process.env.CDK_DEFAULT_REGION,
-      },
-    });
+    constructor(scope: Construct, id: string, props?: StackProps) {
+        super(scope, id, {
+            ...props,
+            env: {
+                account: process.env.CDK_DEFAULT_ACCOUNT,
+                region: process.env.CDK_DEFAULT_REGION,
+            },
+        });
 
-    // Create Cognito User Pool
-    const cognitoUserPool = new CognitoUserPool(this, "CognitoUserPool");
+        // Create Cognito User Pool
+        const cognitoUserPool = new CognitoUserPool(this, "CognitoUserPool");
 
-    // Create DynamoDB tables
-    const dynamoDbTables = new DynamoDbTables(this, "DynamoDbTables");
+        // Create DynamoDB tables
+        const dynamoDbTables = new DynamoDbTables(this, "DynamoDbTables");
 
-    // Create API Lambda functions
-    const lambdaFunctions = new LambdaFunctions(this, "LambdaFunctions", {
-      runningInstancesTable: dynamoDbTables.runningInstancesTable,
-      runningStreamsTable: dynamoDbTables.runningStreamsTable,
-    });
+        // Create API Lambda functions
+        const lambdaFunctions = new LambdaFunctions(this, "LambdaFunctions", {
+            runningInstancesTable: dynamoDbTables.runningInstancesTable,
+            runningStreamsTable: dynamoDbTables.runningStreamsTable,
+        });
 
+        // Grant EC2 permissions to deployInstance Lambda
+        lambdaFunctions.deployInstanceFunction.addToRolePolicy(
+            new PolicyStatement({
+                actions: ["ec2:RunInstances", "ec2:CreateTags", "ec2:DescribeInstances"],
+                resources: [`arn:aws:ec2:${this.region}:${this.account}:subnet/subnet-12345678`],
+            }),
+        );
 
+        // Grant DynamoDB permissions
+        dynamoDbTables.runningInstancesTable.grantWriteData(lambdaFunctions.deployInstanceFunction);
+        dynamoDbTables.runningInstancesTable.grantReadWriteData(lambdaFunctions.deployEC2Function);
+        dynamoDbTables.runningStreamsTable.grantReadData(
+            lambdaFunctions.checkRunningStreamsFunction,
+        );
+        dynamoDbTables.runningStreamsTable.grantWriteData(
+            lambdaFunctions.updateRunningStreamsFunction,
+        );
 
-    // Grant EC2 permissions to deployInstance Lambda
-    lambdaFunctions.deployInstanceFunction.addToRolePolicy(
-      new PolicyStatement({
-        actions: [
-          "ec2:RunInstances",
-          "ec2:CreateTags",
-          "ec2:DescribeInstances",
-        ],
-        resources: [
-          `arn:aws:ec2:${this.region}:${this.account}:subnet/subnet-12345678`,
-        ],
-      })
-    );
+        // Grant DynamoDB permissions for UserTerminateEC2 workflow
+        dynamoDbTables.runningStreamsTable.grantReadData(
+            lambdaFunctions.checkRunningStreamsTerminateFunction,
+        );
+        dynamoDbTables.runningInstancesTable.grantReadWriteData(
+            lambdaFunctions.terminateEC2Function,
+        );
+        dynamoDbTables.runningStreamsTable.grantWriteData(
+            lambdaFunctions.updateRunningStreamsTerminateFunction,
+        );
 
-    // Grant DynamoDB permissions
-    dynamoDbTables.runningInstancesTable.grantWriteData(
-      lambdaFunctions.deployInstanceFunction
-    );
-    dynamoDbTables.runningInstancesTable.grantReadWriteData(
-      lambdaFunctions.deployEC2Function
-    );
-    dynamoDbTables.runningStreamsTable.grantReadData(
-      lambdaFunctions.checkRunningStreamsFunction
-    );
-    dynamoDbTables.runningStreamsTable.grantWriteData(
-      lambdaFunctions.updateRunningStreamsFunction
-    );
+        // Create Step Functions with consistent naming and tagging
+        const stepFunctions = new StepFunctions(this, "StepFunctions", {
+            checkRunningStreamsFunction: lambdaFunctions.checkRunningStreamsFunction,
+            deployEC2Function: lambdaFunctions.deployEC2Function,
+            updateRunningStreamsFunction: lambdaFunctions.updateRunningStreamsFunction,
+            checkRunningStreamsTerminateFunction:
+                lambdaFunctions.checkRunningStreamsTerminateFunction,
+            terminateEC2Function: lambdaFunctions.terminateEC2Function,
+            updateRunningStreamsTerminateFunction:
+                lambdaFunctions.updateRunningStreamsTerminateFunction,
+        });
 
-    // Grant DynamoDB permissions for UserTerminateEC2 workflow
-    dynamoDbTables.runningStreamsTable.grantReadData(
-      lambdaFunctions.checkRunningStreamsTerminateFunction
-    );
-    dynamoDbTables.runningInstancesTable.grantReadWriteData(
-      lambdaFunctions.terminateEC2Function
-    );
-    dynamoDbTables.runningStreamsTable.grantWriteData(
-      lambdaFunctions.updateRunningStreamsTerminateFunction
-    );
+        // Apply consistent tags to Step Functions resources
+        cdk.Tags.of(stepFunctions).add("Component", "StepFunctions");
+        cdk.Tags.of(stepFunctions).add("ManagedBy", "CDK");
 
-    // Create Step Functions with consistent naming and tagging
-    const stepFunctions = new StepFunctions(this, "StepFunctions", {
-      checkRunningStreamsFunction: lambdaFunctions.checkRunningStreamsFunction,
-      deployEC2Function: lambdaFunctions.deployEC2Function,
-      updateRunningStreamsFunction: lambdaFunctions.updateRunningStreamsFunction,
-      checkRunningStreamsTerminateFunction: lambdaFunctions.checkRunningStreamsTerminateFunction,
-      terminateEC2Function: lambdaFunctions.terminateEC2Function,
-      updateRunningStreamsTerminateFunction: lambdaFunctions.updateRunningStreamsTerminateFunction,
-    });
+        // Get UserTerminateEC2Workflow
+        const terminateWorkflow = stepFunctions.getWorkflow("UserTerminateEC2Workflow");
+        if (!terminateWorkflow) {
+            throw new Error("UserTerminateEC2Workflow not found");
+        }
 
-    // Apply consistent tags to Step Functions resources
-    cdk.Tags.of(stepFunctions).add("Component", "StepFunctions");
-    cdk.Tags.of(stepFunctions).add("ManagedBy", "CDK");
+        // Grant step functions permissions to terminateInstanceFunction
+        lambdaFunctions.terminateInstanceFunction.addToRolePolicy(
+            new PolicyStatement({
+                actions: ["stepfunctions:StartExecution"],
+                resources: [terminateWorkflow.stateMachineArn],
+            }),
+        );
 
-    // Create API Gateway
-    const apiGateway = new ApiGateway(this, "ApiGateway", {
-      deployInstanceFunction: lambdaFunctions.deployInstanceFunction,
-      terminateInstanceFunction: lambdaFunctions.terminateInstanceFunction,
-      streamingLinkFunction: lambdaFunctions.streamingLinkFunction,
-      userPool: cognitoUserPool.userPool,
-    });
-  }
+        // Add Step Function ARN as environment variable to terminateInstanceFunction
+        lambdaFunctions.terminateInstanceFunction.addEnvironment(
+            "TERMINATE_WORKFLOW_ARN",
+            terminateWorkflow.stateMachineArn,
+        );
+
+        // Grant DynamoDB write permissions to terminateInstanceFunction for storing execution ARN
+        dynamoDbTables.runningInstancesTable.grantWriteData(
+            lambdaFunctions.terminateInstanceFunction,
+        );
+
+        // Grant EC2 termination permissions to terminateEC2Function
+        lambdaFunctions.terminateEC2Function.addToRolePolicy(
+            new PolicyStatement({
+                actions: ["ec2:TerminateInstances", "ec2:DescribeInstances"],
+                resources: ["*"],
+            }),
+        );
+
+        // Create API Gateway with Cognito authorizer
+        const apiGateway = new ApiGateway(this, "ApiGateway", {
+            deployInstanceFunction: lambdaFunctions.deployInstanceFunction,
+            terminateInstanceFunction: lambdaFunctions.terminateInstanceFunction,
+            streamingLinkFunction: lambdaFunctions.streamingLinkFunction,
+            userPool: cognitoUserPool.userPool,
+        });
+    }
 }
