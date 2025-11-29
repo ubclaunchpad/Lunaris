@@ -4,12 +4,15 @@ import {
     GetCommand,
     PutCommand,
     UpdateCommand,
+    DeleteCommand,
     QueryCommand,
     type TranslateConfig,
     type GetCommandInput,
     type PutCommandInput,
     type GetCommandOutput,
     type UpdateCommandInput,
+    type DeleteCommandInput,
+    type QueryCommandInput,
 } from "@aws-sdk/lib-dynamodb";
 
 class DynamoDBWrapper {
@@ -29,27 +32,6 @@ class DynamoDBWrapper {
 
         this.client = DynamoDBDocumentClient.from(new DynamoDBClient(config), translateConfig);
         this.tableName = tableName;
-    }
-
-    async queryItemsByUserId(userId: string) {
-        try {
-            const command = new QueryCommand({
-                TableName: this.tableName,
-                IndexName: "UserIdIndex",
-                KeyConditionExpression: "userId = :userId",
-                ExpressionAttributeValues: {
-                    ":userId": userId,
-                },
-            });
-
-            const res = await this.client.send(command);
-            return res.Items || [];
-        } catch (error) {
-            console.error("Error querying items by userId:", error);
-            throw new Error(
-                `Failed to query items by userId: ${error instanceof Error ? error.message : "Unknown error"}`,
-            );
-        }
     }
 
     async getItem(
@@ -84,6 +66,62 @@ class DynamoDBWrapper {
         };
 
         await this.client.send(new UpdateCommand(inputConfig));
+    }
+
+    async deleteItem(key: DeleteCommandInput["Key"], options?: Partial<DeleteCommandInput>) {
+        const inputConfig: DeleteCommandInput = {
+            ...(options ?? {}),
+            TableName: this.tableName,
+            Key: key,
+        };
+
+        await this.client.send(new DeleteCommand(inputConfig));
+    }
+
+    async query(options: Partial<QueryCommandInput>) {
+        const inputConfig: QueryCommandInput = {
+            ...options,
+            TableName: this.tableName,
+        };
+
+        const response = await this.client.send(new QueryCommand(inputConfig));
+        return response.Items ?? [];
+    }
+
+    async queryByUserId(userId: string) {
+        return this.query({
+            IndexName: "UserIdIndex",
+            KeyConditionExpression: "userId = :userId",
+            ExpressionAttributeValues: {
+                ":userId": userId,
+            },
+        });
+    }
+
+    async queryByStatus(status: string) {
+        return this.query({
+            IndexName: "StatusCreationTimeIndex",
+            KeyConditionExpression: "#status = :status",
+            ExpressionAttributeNames: {
+                "#status": "status",
+            },
+            ExpressionAttributeValues: {
+                ":status": status,
+            },
+        });
+    }
+
+    async queryByRegion(region: string) {
+        return this.query({
+            IndexName: "RegionIndex",
+            KeyConditionExpression: "#region = :region",
+            ExpressionAttributeNames: {
+                "#region": "region",
+            },
+            ExpressionAttributeValues: {
+                ":region": region,
+            },
+        });
     }
 
     getTableName(): string {

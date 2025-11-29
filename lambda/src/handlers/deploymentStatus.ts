@@ -85,7 +85,7 @@ export const handler: APIGatewayProxyHandler = async (event) => {
             });
         }
         // fetch the latest runtime instance for the user
-        const instances = await dbClient.queryItemsByUserId(userId);
+        const instances = await dbClient.queryByUserId(userId);
 
         if (!instances || instances.length === 0) {
             return createResponse(404, {

@@ -167,6 +167,23 @@ curl -X POST "http://localhost:9000/2015-03-31/functions/function/invocations" \
   }'
 ```
 
+#### Test terminateInstance Handler
+
+```bash
+# Stop the Lambda container if running
+docker-compose stop lambda
+
+# Start Lambda container with terminateInstance handler
+docker-compose run --rm -p 9000:8080 lambda handlers/terminateInstance.handler
+
+# In another terminal, test the handler
+curl -X POST "http://localhost:9000/2015-03-31/functions/function/invocations" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "body": "{\"userId\":\"test-user-123\",\"instanceId\":\"i-1234567890abcdef0\"}"
+  }'
+```
+
 ### Testing Other Services
 
 ```bash

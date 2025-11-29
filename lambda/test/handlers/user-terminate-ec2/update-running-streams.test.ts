@@ -22,7 +22,6 @@ describe("user-terminate-ec2/update-running-streams", () => {
             userId: "user-123",
             sessionId: "session-456",
             instanceArn: "arn:aws:ec2:region:acct:instance/i-abc",
-            running: true,
         });
 
         expect(result).toEqual({ success: true });
@@ -46,7 +45,6 @@ describe("user-terminate-ec2/update-running-streams", () => {
                 userId: "user-123",
                 sessionId: "session-456",
                 instanceArn: "arn",
-                running: true,
             }),
         ).rejects.toThrow("MissingTableNameEnv");
     });
@@ -59,7 +57,6 @@ describe("user-terminate-ec2/update-running-streams", () => {
                 userId: "user-123",
                 sessionId: "session-456",
                 instanceArn: "arn",
-                running: true,
             }),
         ).rejects.toThrow("ddb-update");
     });

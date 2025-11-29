@@ -3,6 +3,7 @@
 **/.DS_Store/**
 .kiro
 node_modules
+**/package-lock.json/**
 
 # Environment files (if using .env approach instead of samconfig.toml)
 .env.local
