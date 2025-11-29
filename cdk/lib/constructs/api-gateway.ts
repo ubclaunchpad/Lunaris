@@ -2,7 +2,6 @@ import { Construct } from "constructs";
 import {
     LambdaRestApi,
     LambdaIntegration,
-    Resource,
     CognitoUserPoolsAuthorizer,
     AuthorizationType,
 } from "aws-cdk-lib/aws-apigateway";

@@ -23,12 +23,6 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
     const [error, setError] = useState("");
     const router = useRouter();
 
-    // Hardcoded login credentials
-    const validCredentials = {
-        email: "admin@lunaris.com",
-        password: "admin123",
-    };
-
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         setError("");

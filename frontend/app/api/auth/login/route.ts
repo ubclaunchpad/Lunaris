@@ -30,7 +30,7 @@ export async function POST(req: Request) {
             accessToken: result?.AccessToken,
             refreshToken: result?.RefreshToken,
         });
-    } catch (err: any) {
+    } catch (err: unknown) {
         console.error("Cognito error:", err);
         return NextResponse.json({ success: false, message: err.message }, { status: 400 });
     }

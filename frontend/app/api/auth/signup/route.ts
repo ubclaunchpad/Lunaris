@@ -27,7 +27,7 @@ export async function POST(req: Request) {
         const response = await client.send(command);
 
         return NextResponse.json({ success: true, response });
-    } catch (err: any) {
+    } catch (err: unknown) {
         console.error("Signup error:", err);
         return NextResponse.json({ success: false, message: err.message }, { status: 400 });
     }

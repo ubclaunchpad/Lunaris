@@ -70,6 +70,7 @@ export default defineConfig([
             "awscdk/no-construct-stack-suffix": "off",
             "awscdk/no-variable-construct-id": "off",
             "awscdk/no-mutable-property-of-props-interface": "off", // seems too noisy for now as it enforces thie rule on all types that end with "Props"
+            "awscdk/no-construct-in-public-property-of-construct": "off", // can redefine this later
         },
     },
     // Lambda config
