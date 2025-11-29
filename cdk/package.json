@@ -9,7 +9,7 @@
     "build": "npm run build:lambda && npm run build:cdk && npm run copy-assets",
     "build:lambda": "cd ../lambda && npm run build",
     "build:cdk": "tsc",
-    "copy-assets": "cp -r stepfunctions dist/ 2>/dev/null || true && find dist/stepfunctions -name '*.ts' -delete 2>/dev/null || true",
+    "copy-assets": "node scripts/copy-stepfunctions.js",
     "watch": "tsc -w",
     "test": "jest",
     "clean": "rm -rf dist",

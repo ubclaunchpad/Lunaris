@@ -2,6 +2,8 @@ import { Construct } from "constructs";
 import { Code, Function, Runtime, FunctionProps } from "aws-cdk-lib/aws-lambda";
 import { Duration } from "aws-cdk-lib";
 import { Table } from "aws-cdk-lib/aws-dynamodb";
+import * as path from "path";
+
 
 export interface LambdaFunctionsProps {
   runningInstancesTable: Table;
@@ -172,7 +174,8 @@ export class LambdaFunctions extends Construct {
   > {
     return {
       runtime: Runtime.NODEJS_22_X,
-      code: Code.fromAsset("stepfunctions/example-workflow/lambdas"),
+      // code: Code.fromAsset("stepfunctions/example-workflow/lambdas"),
+       code: Code.fromAsset(path.join(__dirname, "../../../../lambda/dist")),
     };
   }
 }

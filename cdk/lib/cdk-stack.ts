@@ -10,7 +10,13 @@ import { CognitoUserPool } from "./constructs/cognito-user-pool";
 
 export class CdkStack extends Stack {
   constructor(scope: Construct, id: string, props?: StackProps) {
-    super(scope, id, props);
+    super(scope, id, {
+      ...props,
+      env: {
+        account: process.env.CDK_DEFAULT_ACCOUNT,
+        region: process.env.CDK_DEFAULT_REGION,
+      },
+    });
 
     // Create Cognito User Pool
     const cognitoUserPool = new CognitoUserPool(this, "CognitoUserPool");
