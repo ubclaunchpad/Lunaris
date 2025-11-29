@@ -1,0 +1,179 @@
+schemaVersion: "2.2"
+description: Create DCV session and return streaming URL (run each time user needs access)
+parameters:
+    SessionName:
+        type: String
+        description: Unique session name for this user
+    SessionOwner:
+        type: String
+        default: Administrator
+        description: Windows user who owns the session
+
+mainSteps:
+    - action: aws:runPowerShellScript
+      name: VerifyDcvInstalled
+      inputs:
+          runCommand:
+              - '$ErrorActionPreference = "Stop"'
+              - |
+                  Write-Host "Verifying DCV is installed..."
+
+                  $dcvExe = "C:\Program Files\NICE\DCV\Server\bin\dcv.exe"
+                  if (!(Test-Path $dcvExe)) {
+                      Write-Error "DCV not installed. Run install_dcv.yml first."
+                      exit 1
+                  }
+                  Write-Host "DCV executable found"
+
+                  $service = Get-Service -Name "DcvServer" -ErrorAction SilentlyContinue
+                  if (!$service) {
+                      Write-Error "DCV Server service not found. Run install_dcv.yml first."
+                      exit 1
+                  }
+                  Write-Host "DCV Server service found (Status: $($service.Status))"
+
+    - name: EnsureServiceRunning
+      action: aws:runPowerShellScript
+      inputs:
+          runCommand:
+              - '$ErrorActionPreference = "Stop"'
+              - |
+                  Write-Host "Ensuring DCV Server is running..."
+
+                  $service = Get-Service -Name "DcvServer"
+
+                  if ($service.Status -ne "Running") {
+                      Write-Host "Starting DCV Server service..."
+                      Start-Service -Name "DcvServer"
+                      Start-Sleep -Seconds 10
+
+                      $service = Get-Service -Name "DcvServer"
+                      if ($service.Status -ne "Running") {
+                          Write-Error "Failed to start DCV Server. Status: $($service.Status)"
+                          exit 1
+                      }
+                      Write-Host "DCV Server started"
+                  } else {
+                      Write-Host "DCV Server already running"
+                  }
+
+    - name: CreateOrGetSession
+      action: aws:runPowerShellScript
+      inputs:
+          runCommand:
+              - '$ErrorActionPreference = "Stop"'
+              - '$dcv = "C:\Program Files\NICE\DCV\Server\bin\dcv.exe"'
+              - '$sessionName = "{{ SessionName }}"'
+              - '$sessionOwner = "{{ SessionOwner }}"'
+              - |
+                  Write-Host "Managing DCV session: $sessionName"
+
+                  # List existing sessions
+                  Write-Host "`nChecking for existing sessions..."
+                  $sessions = & $dcv list-sessions 2>&1
+
+                  if ($LASTEXITCODE -eq 0 -and $sessions) {
+                      Write-Host "Existing sessions:"
+                      Write-Host $sessions
+                  } else {
+                      Write-Host "No existing sessions found"
+                  }
+
+                  # Check if our session exists
+                  $existingSession = $sessions | Select-String -SimpleMatch $sessionName
+
+                  if ($existingSession) {
+                      Write-Host "`n Session '$sessionName' already exists"
+                      Write-Host "Reusing existing session"
+                  } else {
+                      Write-Host "`nCreating new session: $sessionName"
+                      Write-Host "Owner: $sessionOwner"
+
+                      & $dcv create-session --name $sessionName --owner $sessionOwner --type console
+
+                      if ($LASTEXITCODE -ne 0) {
+                          Write-Error "Failed to create DCV session"
+                          Write-Host "`nTrying to get detailed error..."
+                          & $dcv list-sessions
+                          exit 1
+                      }
+
+                      Write-Host "Session created successfully"
+
+                      # Wait a moment for session to initialize
+                      Start-Sleep -Seconds 3
+                  }
+
+                  # Verify session is in list
+                  Write-Host "`nCurrent active sessions:"
+                  & $dcv list-sessions | Out-String | Write-Host
+
+    - name: VerifyPortAccessible
+      action: aws:runPowerShellScript
+      inputs:
+          runCommand:
+              - '$ErrorActionPreference = "Stop"'
+              - |
+                  Write-Host "Verifying DCV web server is accessible..."
+
+                  $test = Test-NetConnection -ComputerName localhost -Port 8443 -WarningAction SilentlyContinue
+
+                  if (-not $test.TcpTestSucceeded) {
+                      Write-Error "Port 8443 not listening!"
+                      Write-Host "`nDCV Server service status:"
+                      Get-Service -Name "DcvServer" | Format-List Name, Status, StartType
+
+                      Write-Host "`nTrying to restart DCV Server..."
+                      Restart-Service -Name "DcvServer" -Force
+                      Start-Sleep -Seconds 10
+
+                      $test = Test-NetConnection -ComputerName localhost -Port 8443 -WarningAction SilentlyContinue
+                      if (-not $test.TcpTestSucceeded) {
+                          Write-Error "Port 8443 still not accessible after restart"
+                          exit 1
+                      }
+                  }
+
+                  Write-Host "Port 8443 is accessible"
+
+    - name: GenerateStreamingUrl
+      action: aws:runPowerShellScript
+      inputs:
+          runCommand:
+              - '$ErrorActionPreference = "Stop"'
+              - '$sessionName = "{{ SessionName }}"'
+              - |
+                  Write-Host "Generating streaming URL..."
+
+                  # Get public IP
+                  try {
+                      $publicIp = Invoke-RestMethod -Uri "http://169.254.169.254/latest/meta-data/public-ipv4" -TimeoutSec 5
+                      Write-Host "Public IP: $publicIp"
+                  } catch {
+                      Write-Error "Failed to retrieve public IP from instance metadata: $_"
+                      exit 1
+                  }
+
+                  if (-not $publicIp) {
+                      Write-Error "Public IP is empty"
+                      exit 1
+                  }
+
+                  # Construct URL
+                  $url = "https://{0}:8443?session-id={1}" -f $publicIp, $sessionName
+
+                  Write-Host "`n=========================================="
+                  Write-Host "DCV STREAMING READY"
+                  Write-Host "=========================================="
+                  Write-Host "Session Name: $sessionName"
+                  Write-Host "Session Owner: {{ SessionOwner }}"
+                  Write-Host "Public IP: $publicIp"
+                  Write-Host "Port: 8443"
+                  Write-Host ""
+                  Write-Host "STREAMING URL:"
+                  Write-Host $url
+                  Write-Host "=========================================="
+                  Write-Host ""
+                  Write-Host "FINAL_DCV_URL=$url"
+                  Write-Host "SESSION_NAME=$sessionName"
+                  Write-Host "PUBLIC_IP=$publicIp"

@@ -1,5 +1,5 @@
 // Jest setup file for Lambda package tests
-import { afterEach, beforeEach, jest } from "@jest/globals";
+import { afterAll, afterEach, beforeAll, beforeEach, jest } from "@jest/globals";
 
 // Suppress expected console.error output from error handling tests
 const originalError = console.error;

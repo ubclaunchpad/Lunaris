@@ -1,21 +1,27 @@
 import { mockClient } from "aws-sdk-client-mock";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 import { EC2Client } from "@aws-sdk/client-ec2";
 import { SSMClient } from "@aws-sdk/client-ssm";
 import { SFNClient } from "@aws-sdk/client-sfn";
+import { IAMClient } from "@aws-sdk/client-iam";
 
 // Create mock clients for AWS services
 export const dynamoDBMock = mockClient(DynamoDBClient);
+export const dynamoDBDocumentMock = mockClient(DynamoDBDocumentClient);
 export const ec2Mock = mockClient(EC2Client);
 export const ssmMock = mockClient(SSMClient);
 export const sfnMock = mockClient(SFNClient);
+export const iamMock = mockClient(IAMClient);
 
 // Helper function to reset all mocks
 export const resetAllMocks = () => {
+    dynamoDBDocumentMock.reset();
     dynamoDBMock.reset();
     ec2Mock.reset();
     ssmMock.reset();
     sfnMock.reset();
+    iamMock.reset();
 };
 
 // Common mock responses
@@ -30,6 +36,22 @@ export const mockResponses = {
         },
         updateItem: { $metadata: { httpStatusCode: 200 } },
         deleteItem: { $metadata: { httpStatusCode: 200 } },
+    },
+    dynamoDocument: {
+        query: {
+            Items: [],
+            $metadata: { httpStatusCode: 200 },
+        },
+        put: {
+            $metadata: { httpStatusCode: 200 },
+        },
+        get: {
+            Item: {
+                id: "test-id",
+                status: "active",
+            },
+            $metadata: { httpStatusCode: 200 },
+        },
     },
     ec2: {
         runInstances: {
