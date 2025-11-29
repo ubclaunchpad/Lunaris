@@ -2,8 +2,6 @@ import { Construct } from "constructs";
 import * as cognito from "aws-cdk-lib/aws-cognito";
 import { Duration, RemovalPolicy, CfnOutput } from "aws-cdk-lib";
 
-
-
 export class CognitoUserPool extends Construct {
     public readonly userPool: cognito.UserPool;
     public readonly userPoolClient: cognito.UserPoolClient;
