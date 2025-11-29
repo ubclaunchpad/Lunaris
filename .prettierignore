@@ -8,3 +8,5 @@ node_modules/
 Dockerfile
 **/Dockerfile
 *.dockerignore
+*.env
+*.gitignore
