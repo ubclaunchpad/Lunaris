@@ -10,6 +10,7 @@ if (!fs.existsSync(destDir)) {
 }
 
 // Recursive function to copy directories and files
+// Only copies .json and .js/.d.ts (compiled) files, not .ts source files
 function copyRecursive(src, dest) {
     if (!fs.existsSync(dest)) {
         fs.mkdirSync(dest, { recursive: true });
@@ -25,7 +26,10 @@ function copyRecursive(src, dest) {
         if (stat.isDirectory()) {
             copyRecursive(srcPath, destPath);
         } else {
-            fs.copyFileSync(srcPath, destPath);
+            // Only copy compiled files (.js, .d.ts, .map) and definition files (.json, .asl.json)
+            if (file.endsWith('.js') || file.endsWith('.d.ts') || file.endsWith('.map') || file.endsWith('.json')) {
+                fs.copyFileSync(srcPath, destPath);
+            }
         }
     });
 }
