@@ -63,7 +63,13 @@
         "eslint-plugin-react": "^7.37.5",
         "globals": "^16.5.0",
         "prettier": "^3.6.2",
-        "tsx": "^4.19.2",
+        "tsx": "^4.20.6",
         "typescript-eslint": "^8.46.3"
+    },
+    "dependencies": {
+        "@aws-sdk/client-cognito-identity-provider": "^3.940.0",
+        "aws-amplify": "^6.15.8",
+        "aws-cdk-lib": "^2.224.0",
+        "constructs": "^10.4.3"
     }
 }

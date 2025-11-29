@@ -4,7 +4,7 @@ import { GalleryVerticalEnd } from "lucide-react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useUser } from "@/context/usercontext";
-
+import { login } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,24 +23,25 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
     const [error, setError] = useState("");
     const router = useRouter();
 
-    // Hardcoded login credentials
-    const validCredentials = {
-        email: "admin@lunaris.com",
-        password: "admin123",
-    };
-
-    const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         setError("");
 
-        // Check if credentials match
-        if (email === validCredentials.email && password === validCredentials.password) {
-            console.log("Login successful!");
-            // Redirect to browse page on successful login
-            setUserId("admin");
+        const result = await login(email, password);
+
+        if (result?.success) {
+            // Store tokens temporarily (later replace with secure cookies)
+            localStorage.setItem("idToken", result.idToken);
+            localStorage.setItem("accessToken", result.accessToken);
+            localStorage.setItem("refreshToken", result.refreshToken);
+
+            // Decode JWT to get userId/email
+            const payload = JSON.parse(atob(result.idToken.split(".")[1]));
+            setUserId(payload.sub);
+
             router.push("/browse");
         } else {
-            setError("Invalid email or password");
+            setError(result.message || "Invalid email or password");
         }
     };
 
