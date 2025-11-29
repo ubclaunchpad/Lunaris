@@ -8,8 +8,11 @@ import {
 import { RemovalPolicy } from "aws-cdk-lib";
 
 export class DynamoDbTables extends Construct {
-  private readonly runningStreamsTable: Table;
-  private readonly runningInstancesTable: Table;
+  // private readonly runningStreamsTable: Table;
+  // private readonly runningInstancesTable: Table;
+
+  public readonly runningStreamsTable: Table;
+  public readonly runningInstancesTable: Table;
 
   constructor(scope: Construct, id: string) {
     super(scope, id);

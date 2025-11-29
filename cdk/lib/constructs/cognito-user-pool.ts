@@ -12,12 +12,17 @@ export class CognitoUserPool extends Construct {
     // Create User Pool for user management
     this.userPool = new cognito.UserPool(this, "LunarisUserPool", {
       userPoolName: "lunaris-user-pool",
-      selfSignUpEnabled: true,
+      featurePlan: cognito.FeaturePlan.LITE, // low level plan
+      signInCaseSensitive: false,
+      selfSignUpEnabled: true,  
       signInAliases: {
         email: true,
-        username: false,
+        username: true,
       },
       autoVerify: {
+        email: true,
+      },
+       keepOriginal: {
         email: true,
       },
       standardAttributes: {

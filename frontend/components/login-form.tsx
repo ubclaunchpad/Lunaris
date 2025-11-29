@@ -33,29 +33,26 @@ export function LoginForm({
   }
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
-    setError("")
+    e.preventDefault();
+    setError("");
 
     const result = await login(email, password);
 
-      if (result?.success) {
-        setUserId(result.userId);
-        router.push("/browser");
-      } else {
-        setError("Invalid email or password")
-      }
+    if (result?.success) {
+      // Store tokens temporarily (later replace with secure cookies)
+      localStorage.setItem("idToken", result.idToken);
+      localStorage.setItem("accessToken", result.accessToken);
+      localStorage.setItem("refreshToken", result.refreshToken);
 
+      // Decode JWT to get userId/email
+      const payload = JSON.parse(atob(result.idToken.split(".")[1]));
+      setUserId(payload.sub);
 
-    // Temporary auth system
-    // if (email === validCredentials.email && password === validCredentials.password) {
-    //   console.log("Login successful!")
-    //   // Redirect to browse page on successful login
-    //   setUserId("admin")
-    //   router.push("/browse")
-    // } else {
-    //   setError("Invalid email or password")
-    // }
-  }
+      router.push("/browse");
+    } else {
+      setError(result.message || "Invalid email or password");
+    }
+  };
 
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
