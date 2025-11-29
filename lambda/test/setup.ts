@@ -22,8 +22,8 @@ beforeEach(() => {
 
 // Global test teardown
 afterEach(() => {
-    // Clean up any remaining mocks
-    jest.restoreAllMocks();
+    // Note: Don't use jest.restoreAllMocks() here as it breaks aws-sdk-client-mock
+    // Individual test files should handle their own mock cleanup
 });
 
 // Configure Jest timeout for async operations

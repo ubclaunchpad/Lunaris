@@ -39,7 +39,9 @@
             "Parameters": {
                 "FunctionName": "${TerminateEC2Arn}",
                 "Payload": {
-                    "userId.$": "$.userId"
+                    "userId.$": "$.userId",
+                    "instanceId.$": "$.checkRunningStreamsResult.Payload.instanceId",
+                    "instanceArn.$": "$.checkRunningStreamsResult.Payload.instanceArn"
                 }
             },
             "ResultPath": "$.terminateResult",
@@ -58,9 +60,7 @@
                 "FunctionName": "${UpdateRunningStreamsArn}",
                 "Payload": {
                     "userId.$": "$.userId",
-                    "sessionId.$": "$.checkRunningStreamsResult.Payload.sessionId",
-                    "instanceArn.$": "$.checkRunningStreamsResult.Payload.instanceArn",
-                    "running": false
+                    "instanceArn.$": "$.checkRunningStreamsResult.Payload.instanceArn"
                 }
             },
             "ResultPath": "$.updateResult",

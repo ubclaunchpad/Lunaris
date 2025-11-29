@@ -42,7 +42,7 @@ open -a Docker
 
 If you encounter a `docker-compose: command not found` error, you have two options:
 
-#### Option 1: Install Standalone docker-compose 
+#### Option 1: Install Standalone docker-compose
 
 Install the standalone `docker-compose` binary to match the project scripts:
 
@@ -70,6 +70,7 @@ alias docker-compose='docker compose'
 ```
 
 Then reload your shell:
+
 ```bash
 source ~/.zshrc  # or source ~/.bashrc
 ```
@@ -163,6 +164,23 @@ curl -X POST "http://localhost:9000/2015-03-31/functions/function/invocations" \
   -H "Content-Type: application/json" \
   -d '{
     "body": "{\"userId\":\"test-user\",\"instanceType\":\"t3.micro\",\"amiId\":\"ami-12345678\"}"
+  }'
+```
+
+#### Test terminateInstance Handler
+
+```bash
+# Stop the Lambda container if running
+docker-compose stop lambda
+
+# Start Lambda container with terminateInstance handler
+docker-compose run --rm -p 9000:8080 lambda handlers/terminateInstance.handler
+
+# In another terminal, test the handler
+curl -X POST "http://localhost:9000/2015-03-31/functions/function/invocations" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "body": "{\"userId\":\"test-user-123\",\"instanceId\":\"i-1234567890abcdef0\"}"
   }'
 ```
 
