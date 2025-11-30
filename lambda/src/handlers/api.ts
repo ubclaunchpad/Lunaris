@@ -285,21 +285,47 @@ const handleStreamingLink = async (event: APIGatewayProxyEvent): Promise<APIGate
             });
         }
 
-        console.log(`Received userId: ${userId}`);
+        console.log(`Querying RunningStreams table for userId: ${userId}`);
 
-        // Success response - just return the data
+        // Query the RunningStreams table by userId using the UserIdIndex
+        const { QueryCommand } = await import("@aws-sdk/lib-dynamodb");
+        const queryCommand = new QueryCommand({
+            TableName: RUNNING_STREAMS_TABLE_NAME,
+            IndexName: "UserIdIndex",
+            KeyConditionExpression: "userId = :userId",
+            ExpressionAttributeValues: {
+                ":userId": userId,
+            },
+        });
+
+        const queryResult = await docClient.send(queryCommand);
+        const results = queryResult.Items || [];
+
+        if (results.length === 0) {
+            return createResponse(404, {
+                error: "Not Found",
+                message: `No streaming session found for userId: ${userId}`,
+            });
+        }
+
+        // Return the most recent entry (first result since sorted by createdAt)
+        const streamRecord = results[0];
+
+        console.log(`Found streaming session for userId ${userId}:`, streamRecord);
+
         return createResponse(200, {
-            userId,
-            message: `Hello, user ${userId}!`,
+            message: "Streaming session found",
+            ...streamRecord,
         });
     } catch (error: unknown) {
         if (error instanceof Error) {
             console.error("Error occurred:", error.message);
+            console.error("Stack trace:", error.stack);
         }
 
         return createResponse(500, {
             error: "Internal Server Error",
-            message: "An unexpected error occurred",
+            message: "An unexpected error occurred while fetching streaming link",
         });
     }
 };
