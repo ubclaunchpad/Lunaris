@@ -24,6 +24,7 @@ export default defineConfig([
         "**/out/**",
         "**/test/**",
         "**/*.config.js",
+        "**/cdk.out/**",
     ]),
     eslintConfigPrettier,
     {

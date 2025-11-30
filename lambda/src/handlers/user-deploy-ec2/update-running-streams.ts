@@ -47,6 +47,7 @@ export const handler = async (
     };
 
     const expressionAttributeValues: Record<string, string | number> = {
+        ":userId": payload.userId,
         ":instanceId": payload.instanceId,
         ":dcvIp": payload.dcvIp,
         ":dcvPort": payload.dcvPort,
@@ -59,6 +60,7 @@ export const handler = async (
 
     const updateExpression = `
       SET
+        userId = :userId,
         instanceId = :instanceId,
         dcvIp = :dcvIp,
         dcvPort = :dcvPort,

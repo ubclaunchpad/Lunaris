@@ -10,10 +10,8 @@ export interface LambdaFunctionsProps {
 }
 
 export class LambdaFunctions extends Construct {
-    // API Lambda Functions
-    public readonly deployInstanceFunction: Function;
-    public readonly terminateInstanceFunction: Function;
-    public readonly streamingLinkFunction: Function;
+    // Unified API Lambda Function
+    public readonly apiFunction: Function;
 
     // User Deploy EC2 Workflow Lambda Functions
     public readonly checkRunningStreamsFunction: Function;
@@ -28,10 +26,8 @@ export class LambdaFunctions extends Construct {
     constructor(scope: Construct, id: string, props: LambdaFunctionsProps) {
         super(scope, id);
 
-        // Create API Lambda functions
-        this.deployInstanceFunction = this.createDeployInstanceFunction(props);
-        this.terminateInstanceFunction = this.createTerminateInstanceFunction(props);
-        this.streamingLinkFunction = this.createStreamingLinkFunction(props);
+        // Create unified API Lambda function
+        this.apiFunction = this.createApiFunction(props);
 
         // Create User Deploy EC2 Workflow Lambda functions
         this.checkRunningStreamsFunction = this.createCheckRunningStreamsFunction(props);
@@ -46,37 +42,13 @@ export class LambdaFunctions extends Construct {
             this.createUpdateRunningStreamsTerminateFunction(props);
     }
 
-    // Creates the Lambda function for deploying EC2 instances
-    private createDeployInstanceFunction(props: LambdaFunctionsProps): Function {
-        return new Function(this, "DeployInstanceHandler", {
+    // Creates the unified API Lambda function that handles all API endpoints
+    private createApiFunction(props: LambdaFunctionsProps): Function {
+        return new Function(this, "LunarisApiHandler", {
             ...this.getBaseLambdaConfig(),
-            handler: "handlers/deployInstance.handler",
-            description: "Deploys EC2 instances for cloud gaming sessions",
+            handler: "handlers/api.handler",
+            description: "Unified API handler for all Lunaris API endpoints",
             timeout: Duration.seconds(60),
-            environment: {
-                RUNNING_INSTANCES_TABLE: props.runningInstancesTable.tableName,
-            },
-        });
-    }
-
-    // Creates the Lambda function for terminating EC2 instances
-    private createTerminateInstanceFunction(props: LambdaFunctionsProps): Function {
-        return new Function(this, "TerminateInstanceHandler", {
-            ...this.getBaseLambdaConfig(),
-            handler: "handlers/terminateInstance.handler",
-            description: "Terminates EC2 instances and cleans up resources",
-            environment: {
-                RUNNING_INSTANCES_TABLE: props.runningInstancesTable.tableName,
-            },
-        });
-    }
-
-    // Creates the Lambda function for generating streaming links
-    private createStreamingLinkFunction(props: LambdaFunctionsProps): Function {
-        return new Function(this, "StreamingLinkHandler", {
-            ...this.getBaseLambdaConfig(),
-            handler: "handlers/streamingLink.handler",
-            description: "Generates streaming links for active gaming sessions",
             environment: {
                 RUNNING_INSTANCES_TABLE: props.runningInstancesTable.tableName,
                 RUNNING_STREAMS_TABLE_NAME: props.runningStreamsTable.tableName,
