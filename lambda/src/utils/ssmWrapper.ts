@@ -213,7 +213,7 @@ class SSMWrapper {
             return response.Parameter.Value;
         } catch (error) {
             console.error(`Unable to get parameter ${paramName}`, error);
-            return "";
+            throw error;
         }
     }
 
