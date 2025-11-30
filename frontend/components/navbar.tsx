@@ -10,7 +10,7 @@ export function Navbar() {
     const isActive = (path: string) => pathname === path;
 
     return (
-        <nav className="fixed top-0 left-0 right-0 z-50 bg-[rgba(251,255,245,0.05)] backdrop-blur-sm border-b border-[rgba(255,255,255,0.1)] shadow-[0px_5px_20px_0px_rgba(0,0,0,0.1)]">
+        <nav className="fixed top-0 left-0 right-0 z-50 bg-[#12191d] border-b border-[rgba(255,255,255,0.1)]">
             <div className="flex items-center justify-between px-7 py-6 max-w-full">
                 <div className="flex items-center gap-11">
                     <div className="flex items-center gap-4">
