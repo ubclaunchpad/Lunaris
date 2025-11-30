@@ -9,9 +9,7 @@ import { Function } from "aws-cdk-lib/aws-lambda";
 import * as cognito from "aws-cdk-lib/aws-cognito";
 
 export interface ApiGatewayProps {
-    deployInstanceFunction: Function;
-    terminateInstanceFunction: Function;
-    streamingLinkFunction: Function;
+    apiFunction: Function;
     userPool?: cognito.UserPool;
 }
 
@@ -23,7 +21,7 @@ export class ApiGateway extends Construct {
         super(scope, id);
 
         this.restApi = new LambdaRestApi(this, "LunarisApi", {
-            handler: props.deployInstanceFunction,
+            handler: props.apiFunction,
             proxy: false,
             description: "LunarisAPI",
         });
@@ -38,13 +36,13 @@ export class ApiGateway extends Construct {
         }
 
         // Add API endpoints to LunarisApi here
-        this.createDeployInstanceEndpoint(props.deployInstanceFunction);
-        this.createTerminateInstanceEndpoint(props.terminateInstanceFunction);
-        this.createStreamingLinkEndpoint(props.streamingLinkFunction);
+        const integration = new LambdaIntegration(props.apiFunction);
+        this.createDeployInstanceEndpoint(integration);
+        this.createTerminateInstanceEndpoint(integration);
+        this.createStreamingLinkEndpoint(integration);
     }
 
-    private createDeployInstanceEndpoint(lambdaFunction: Function): void {
-        const integration = new LambdaIntegration(lambdaFunction);
+    private createDeployInstanceEndpoint(integration: LambdaIntegration): void {
         const resource = this.restApi.root.addResource("deployInstance");
 
         const methodOptions = this.authorizer
@@ -92,8 +90,7 @@ export class ApiGateway extends Construct {
         resource.addMethod("POST", integration, methodOptions);
     }
 
-    private createTerminateInstanceEndpoint(lambdaFunction: Function): void {
-        const integration = new LambdaIntegration(lambdaFunction);
+    private createTerminateInstanceEndpoint(integration: LambdaIntegration): void {
         const resource = this.restApi.root.addResource("terminateInstance");
 
         const methodOptions = this.authorizer
@@ -141,8 +138,7 @@ export class ApiGateway extends Construct {
         resource.addMethod("POST", integration, methodOptions);
     }
 
-    private createStreamingLinkEndpoint(lambdaFunction: Function): void {
-        const integration = new LambdaIntegration(lambdaFunction);
+    private createStreamingLinkEndpoint(integration: LambdaIntegration): void {
         const resource = this.restApi.root.addResource("streamingLink");
 
         const methodOptions = this.authorizer
