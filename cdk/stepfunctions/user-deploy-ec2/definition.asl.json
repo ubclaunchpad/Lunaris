@@ -58,8 +58,12 @@
                 "FunctionName": "${UpdateRunningStreamsArn}",
                 "Payload": {
                     "userId.$": "$.userId",
+                    "instanceId.$": "$.deployResult.Payload.instanceId",
                     "instanceArn.$": "$.deployResult.Payload.instanceArn",
-                    "running": true
+                    "dcvIp.$": "$.deployResult.Payload.dcvIp",
+                    "dcvPort.$": "$.deployResult.Payload.dcvPort",
+                    "dcvUser.$": "$.deployResult.Payload.dcvUser",
+                    "dcvPassword.$": "$.deployResult.Payload.dcvPassword"
                 }
             },
             "ResultPath": "$.updateResult",
