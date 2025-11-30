@@ -9,9 +9,10 @@ export const handler = async (
 
     const db = new DynamoDBWrapper(process.env.RUNNING_STREAMS_TABLE_NAME);
     const userId = event.userId;
+    const items = await db.queryByUserId(userId);
+    const hasActiveStream = items && items.length > 0;
 
-    const item = await db.getItem({ userId });
-    return item ? { streamsRunning: true } : { streamsRunning: false };
+    return { streamsRunning: hasActiveStream };
 };
 
 type CheckRunningStreamsEvent = {

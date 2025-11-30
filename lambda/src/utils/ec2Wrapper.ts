@@ -18,15 +18,12 @@ import { generateArn } from "./generateArn";
 
 export interface EC2InstanceConfig {
     userId: string;
-
-    instanceType?: _InstanceType; // e.g., "t3.medium", "g4dn.xlarge"
-
+    amiId: string;
+    instanceType?: _InstanceType;
     keyName?: string;
     securityGroupIds?: string[];
     subnetId?: string;
     iamInstanceProfile?: string;
-    amiId?: string;
-
     tags?: Record<string, string>;
 }
 
@@ -57,7 +54,7 @@ export interface TerminateResult {
     wasAlreadyTerminated?: boolean;
 }
 
-const DEFAULT_INSTANCE_TYPE = "t3.medium";
+const DEFAULT_INSTANCE_TYPE = "t3.small";
 
 export enum ErrorMessages {
     INSTANCE_NOT_FOUND = "Instance does not exist or is not available",
@@ -65,6 +62,7 @@ export enum ErrorMessages {
     INSTANCE_ALREADY_TERMINATED = "Instance already terminated or terminating",
     WAIT_TERMINATION_FAILED = "Failed to wait for termination of the instance",
     FAILED_GET_INSTANCE_DETAILS = "Failed to retrieve instance details",
+    MISSING_AMI_ID = "AMI ID is required for instance creation",
 }
 
 // EC2 Instances need custom IAM permissions
@@ -80,13 +78,17 @@ class EC2Wrapper {
     private prepareInstanceInput(config: EC2InstanceConfig): RunInstancesCommandInput {
         const {
             userId,
+            amiId,
             instanceType = DEFAULT_INSTANCE_TYPE,
             keyName,
             securityGroupIds,
             subnetId,
-            amiId,
             tags = {},
         } = config;
+
+        if (!amiId) {
+            throw new Error(ErrorMessages.MISSING_AMI_ID);
+        }
 
         const tagSpecifications: RunInstancesCommandInput["TagSpecifications"] = [
             {
@@ -108,24 +110,17 @@ class EC2Wrapper {
                         Key: "purpose",
                         Value: "cloud-gaming",
                     },
-                    {
-                        Key: "dcvConfigured",
-                        Value: amiId ? "true" : "false",
-                    },
                     ...Object.entries(tags).map(([key, value]) => ({ Key: key, Value: value })),
                 ],
             },
         ];
+
         const input: RunInstancesCommandInput = {
-            // use launch template w/ preinstalled DCV
-            LaunchTemplate: {
-                LaunchTemplateName: "BasicDCV",
-            },
-            InstanceType: instanceType, // optional override
+            ImageId: amiId,
+            InstanceType: instanceType,
             MinCount: 1,
             MaxCount: 1,
             TagSpecifications: tagSpecifications,
-            ImageId: amiId,
         };
 
         if (keyName) input.KeyName = keyName;
@@ -139,6 +134,10 @@ class EC2Wrapper {
     async createInstance(config: EC2InstanceConfig): Promise<EC2InstanceResult> {
         if (!config.userId || config.userId.trim() === "") {
             throw new Error("userId is required and cannot be empty");
+        }
+
+        if (!config.amiId || config.amiId.trim() === "") {
+            throw new Error(ErrorMessages.MISSING_AMI_ID);
         }
 
         const input = this.prepareInstanceInput(config);
@@ -172,6 +171,8 @@ class EC2Wrapper {
                     throw new Error("One or more security groups not found");
                 case "InvalidKeyPair.NotFound":
                     throw new Error(`Key pair '${input.KeyName}' not found`);
+                case "InvalidAMIID.NotFound":
+                    throw new Error(`AMI ID not found`);
                 default:
                     const message = error instanceof Error ? error.message : String(error);
                     throw new Error(`Failed to create EC2 instance: ${message}`);

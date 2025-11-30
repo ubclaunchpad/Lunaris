@@ -65,7 +65,17 @@ class DynamoDBWrapper {
             Key: key,
         };
 
-        await this.client.send(new UpdateCommand(inputConfig));
+        try {
+            await this.client.send(new UpdateCommand(inputConfig));
+        } catch (error) {
+            console.error("DynamoDB Update Error Details:");
+            console.error("Table Name:", this.tableName);
+            console.error("Key:", JSON.stringify(key));
+            console.error("Update Expression:", inputConfig.UpdateExpression);
+            console.error("Full Config:", JSON.stringify(inputConfig));
+            console.error("Full Error:", error);
+            throw error;
+        }
     }
 
     async deleteItem(key: DeleteCommandInput["Key"], options?: Partial<DeleteCommandInput>) {

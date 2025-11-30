@@ -39,9 +39,7 @@
             "Parameters": {
                 "FunctionName": "${DeployEC2Arn}",
                 "Payload": {
-                    "userId.$": "$.userId",
-                    "instanceType.$": "$.instanceType",
-                    "amiId.$": "$.amiId"
+                    "userId.$": "$.userId"
                 }
             },
             "ResultPath": "$.deployResult",
@@ -60,8 +58,12 @@
                 "FunctionName": "${UpdateRunningStreamsArn}",
                 "Payload": {
                     "userId.$": "$.userId",
+                    "instanceId.$": "$.deployResult.Payload.instanceId",
                     "instanceArn.$": "$.deployResult.Payload.instanceArn",
-                    "running": true
+                    "dcvIp.$": "$.deployResult.Payload.dcvIp",
+                    "dcvPort.$": "$.deployResult.Payload.dcvPort",
+                    "dcvUser.$": "$.deployResult.Payload.dcvUser",
+                    "dcvPassword.$": "$.deployResult.Payload.dcvPassword"
                 }
             },
             "ResultPath": "$.updateResult",

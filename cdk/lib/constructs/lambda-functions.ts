@@ -2,6 +2,7 @@ import { Construct } from "constructs";
 import { Code, Function, Runtime, FunctionProps } from "aws-cdk-lib/aws-lambda";
 import { Duration } from "aws-cdk-lib";
 import { type ITable } from "aws-cdk-lib/aws-dynamodb";
+import { PolicyStatement, Effect } from "aws-cdk-lib/aws-iam";
 
 export interface LambdaFunctionsProps {
     readonly runningInstancesTable: ITable;
@@ -78,7 +79,7 @@ export class LambdaFunctions extends Construct {
             description: "Generates streaming links for active gaming sessions",
             environment: {
                 RUNNING_INSTANCES_TABLE: props.runningInstancesTable.tableName,
-                RUNNING_STREAMS_TABLE: props.runningStreamsTable.tableName,
+                RUNNING_STREAMS_TABLE_NAME: props.runningStreamsTable.tableName,
             },
         });
     }
@@ -90,21 +91,74 @@ export class LambdaFunctions extends Construct {
             handler: "handlers/user-deploy-ec2/check-running-streams.handler",
             description: "Checks if user has active streaming sessions",
             environment: {
-                RUNNING_STREAMS_TABLE: props.runningStreamsTable.tableName,
+                RUNNING_STREAMS_TABLE_NAME: props.runningStreamsTable.tableName,
             },
         });
     }
 
     // Creates the Lambda function for deploying EC2 instances
     private createDeployEC2Function(props: LambdaFunctionsProps): Function {
-        return new Function(this, "DeployEC2Handler", {
+        const deployEC2Function = new Function(this, "DeployEC2Handler", {
             ...this.getBaseLambdaConfig(),
             handler: "handlers/user-deploy-ec2/deploy-ec2.handler",
             description: "Deploys EC2 instance as part of user deployment workflow",
             environment: {
                 RUNNING_INSTANCES_TABLE: props.runningInstancesTable.tableName,
+                DCV_PASSWORD: "vgw)l-%zpiGlvLsH;bIbB3t.B&C2@grQ",
+                LAMBDA_REGION: process.env.AWS_REGION || "us-west-2",
             },
         });
+
+        // Add permission to read from SSM Parameter Store
+        deployEC2Function.addToRolePolicy(
+            new PolicyStatement({
+                effect: Effect.ALLOW,
+                actions: ["ssm:GetParameter"],
+                resources: ["arn:aws:ssm:*:*:parameter/ami_id"],
+            }),
+        );
+
+        // Add EC2 permissions
+        deployEC2Function.addToRolePolicy(
+            new PolicyStatement({
+                effect: Effect.ALLOW,
+                actions: [
+                    "ec2:RunInstances",
+                    "ec2:DescribeInstances",
+                    "ec2:DescribeInstanceStatus",
+                    "ec2:CreateTags",
+                    "ec2:DescribeSecurityGroups",
+                    "ec2:DescribeSubnets",
+                    "ec2:DescribeKeyPairs",
+                ],
+                resources: ["*"],
+            }),
+        );
+
+        // Add IAM permission to pass role to EC2
+        deployEC2Function.addToRolePolicy(
+            new PolicyStatement({
+                effect: Effect.ALLOW,
+                actions: ["iam:PassRole"],
+                resources: ["*"],
+            }),
+        );
+
+        // Add SSM permissions for sending commands to instances
+        deployEC2Function.addToRolePolicy(
+            new PolicyStatement({
+                effect: Effect.ALLOW,
+                actions: [
+                    "ssm:SendCommand",
+                    "ssm:GetCommandInvocation",
+                    "ssm:CreateDocument",
+                    "ssm:GetDocument",
+                ],
+                resources: ["*"],
+            }),
+        );
+
+        return deployEC2Function;
     }
 
     // Creates the Lambda function for updating running streams
@@ -114,7 +168,7 @@ export class LambdaFunctions extends Construct {
             handler: "handlers/user-deploy-ec2/update-running-streams.handler",
             description: "Updates running streams table with new session information",
             environment: {
-                RUNNING_STREAMS_TABLE: props.runningStreamsTable.tableName,
+                RUNNING_STREAMS_TABLE_NAME: props.runningStreamsTable.tableName,
             },
         });
     }
@@ -126,7 +180,7 @@ export class LambdaFunctions extends Construct {
             handler: "handlers/user-terminate-ec2/check-running-streams.handler",
             description: "Checks if user has active streaming sessions for termination",
             environment: {
-                RUNNING_STREAMS_TABLE: props.runningStreamsTable.tableName,
+                RUNNING_STREAMS_TABLE_NAME: props.runningStreamsTable.tableName,
             },
         });
     }
@@ -150,7 +204,7 @@ export class LambdaFunctions extends Construct {
             handler: "handlers/user-terminate-ec2/update-running-streams.handler",
             description: "Updates running streams table to mark session as terminated",
             environment: {
-                RUNNING_STREAMS_TABLE: props.runningStreamsTable.tableName,
+                RUNNING_STREAMS_TABLE_NAME: props.runningStreamsTable.tableName,
             },
         });
     }
