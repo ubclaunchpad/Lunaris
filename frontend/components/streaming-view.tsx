@@ -10,7 +10,7 @@ const DcvViewer = dynamic(() => import("@/components/ui/DcvViewer"), {
 
 
 // waiting for a link
-const SERVER_URL = ""
+const SERVER_URL = "https://128.189.189.50:8443/#launchpad"
 const BASE_URL = "/public/dcv-ui"
 
 export default function StreamingView() {

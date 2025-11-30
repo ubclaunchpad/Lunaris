@@ -8,6 +8,8 @@ import { DCVViewer } from "dcv-ui"
 type DcvProps = {
     logLevel?: number;
     serverUrl: string;
+    user: string;
+    pass: string;
     baseUrl: string;
 };
 
@@ -23,6 +25,7 @@ export default function DcvViewer({
     const [authenticated, setAuthenticated] = useState(false)
     const [sessionId, setSessionId] = useState("")
     const [authToken, setAuthToken] = useState("")
+    const [credentials, setCredentials] = React.useState({})
 
     let auth: AuthHandle
 
@@ -38,12 +41,18 @@ export default function DcvViewer({
         console.error("DCV auth error:", error?.message)
     }
 
+    const onPromptCredentials = (_, credentialsChallenge) => {
+        console.log("Reached prompt credentials")
+        auth.sendCredentials({username: "devda", password: "Launchpad123!"})
+    }
+
     const authenticate = () => {
         dcv.setLogLevel(logLevel)
+
         auth = dcv.authenticate(
             serverUrl,
             {
-                promptCredentials: {},
+                promptCredentials: onPromptCredentials,
                 error: onError,
                 success: onSuccess,
             }
