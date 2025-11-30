@@ -26,7 +26,7 @@ export interface GetStreamingLinkResponse {
     userId?: string;
     message: string;
     error?: string;
-    [key: string]: any;
+    [key: string]: unknown;
 }
 
 export interface GetDeploymentStatusRequest {
