@@ -78,7 +78,7 @@ export class LambdaFunctions extends Construct {
             description: "Generates streaming links for active gaming sessions",
             environment: {
                 RUNNING_INSTANCES_TABLE: props.runningInstancesTable.tableName,
-                RUNNING_STREAMS_TABLE: props.runningStreamsTable.tableName,
+                RUNNING_STREAMS_TABLE_NAME: props.runningStreamsTable.tableName,
             },
         });
     }
@@ -90,7 +90,7 @@ export class LambdaFunctions extends Construct {
             handler: "handlers/user-deploy-ec2/check-running-streams.handler",
             description: "Checks if user has active streaming sessions",
             environment: {
-                RUNNING_STREAMS_TABLE: props.runningStreamsTable.tableName,
+                RUNNING_STREAMS_TABLE_NAME: props.runningStreamsTable.tableName,
             },
         });
     }
@@ -114,7 +114,7 @@ export class LambdaFunctions extends Construct {
             handler: "handlers/user-deploy-ec2/update-running-streams.handler",
             description: "Updates running streams table with new session information",
             environment: {
-                RUNNING_STREAMS_TABLE: props.runningStreamsTable.tableName,
+                RUNNING_STREAMS_TABLE_NAME: props.runningStreamsTable.tableName,
             },
         });
     }
@@ -126,7 +126,7 @@ export class LambdaFunctions extends Construct {
             handler: "handlers/user-terminate-ec2/check-running-streams.handler",
             description: "Checks if user has active streaming sessions for termination",
             environment: {
-                RUNNING_STREAMS_TABLE: props.runningStreamsTable.tableName,
+                RUNNING_STREAMS_TABLE_NAME: props.runningStreamsTable.tableName,
             },
         });
     }
@@ -150,7 +150,7 @@ export class LambdaFunctions extends Construct {
             handler: "handlers/user-terminate-ec2/update-running-streams.handler",
             description: "Updates running streams table to mark session as terminated",
             environment: {
-                RUNNING_STREAMS_TABLE: props.runningStreamsTable.tableName,
+                RUNNING_STREAMS_TABLE_NAME: props.runningStreamsTable.tableName,
             },
         });
     }

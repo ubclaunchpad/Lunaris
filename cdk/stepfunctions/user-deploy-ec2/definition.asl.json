@@ -39,9 +39,7 @@
             "Parameters": {
                 "FunctionName": "${DeployEC2Arn}",
                 "Payload": {
-                    "userId.$": "$.userId",
-                    "instanceType.$": "$.instanceType",
-                    "amiId.$": "$.amiId"
+                    "userId.$": "$.userId"
                 }
             },
             "ResultPath": "$.deployResult",
