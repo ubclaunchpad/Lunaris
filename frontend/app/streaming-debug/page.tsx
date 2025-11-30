@@ -15,7 +15,7 @@ export default function StreamingPage() {
 
         try {
             const response = await apiClient.deployInstance({
-                userId: "test123"
+                userId: "test123",
             });
             setMessage(`Success: ${response.message}`);
         } catch (error) {
@@ -31,11 +31,13 @@ export default function StreamingPage() {
 
         try {
             const response = await apiClient.getStreamingLink({
-                userId: "test123"
+                userId: "test123",
             });
             setMessage(`Success: ${response.message} ${JSON.stringify(response, null, 2)}`);
         } catch (error) {
-            setMessage(`Error: ${error instanceof Error ? error.message : "Failed to get streaming link"}`);
+            setMessage(
+                `Error: ${error instanceof Error ? error.message : "Failed to get streaming link"}`,
+            );
         } finally {
             setIsGettingLink(false);
         }
