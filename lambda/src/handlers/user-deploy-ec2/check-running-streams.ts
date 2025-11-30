@@ -11,7 +11,7 @@ export const handler = async (
     const userId = event.userId;
     const items = await db.queryByUserId(userId);
     const hasActiveStream = items && items.length > 0;
-    
+
     return { streamsRunning: hasActiveStream };
 };
 

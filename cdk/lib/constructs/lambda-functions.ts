@@ -115,7 +115,7 @@ export class LambdaFunctions extends Construct {
                 effect: Effect.ALLOW,
                 actions: ["ssm:GetParameter"],
                 resources: ["arn:aws:ssm:*:*:parameter/ami_id"],
-            })
+            }),
         );
 
         // Add EC2 permissions
@@ -132,7 +132,7 @@ export class LambdaFunctions extends Construct {
                     "ec2:DescribeKeyPairs",
                 ],
                 resources: ["*"],
-            })
+            }),
         );
 
         // Add IAM permission to pass role to EC2
@@ -141,7 +141,7 @@ export class LambdaFunctions extends Construct {
                 effect: Effect.ALLOW,
                 actions: ["iam:PassRole"],
                 resources: ["*"],
-            })
+            }),
         );
 
         // Add SSM permissions for sending commands to instances
@@ -155,7 +155,7 @@ export class LambdaFunctions extends Construct {
                     "ssm:GetDocument",
                 ],
                 resources: ["*"],
-            })
+            }),
         );
 
         return deployEC2Function;

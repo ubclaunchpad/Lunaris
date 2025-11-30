@@ -17,14 +17,18 @@ export function Navbar() {
                         <div className="w-10 h-10 bg-[#e1ff9a] rounded-full flex items-center justify-center">
                             <span className="text-[#12191d] font-bold text-lg">L</span>
                         </div>
-                        <span className="text-[#fbfff5] font-bold text-2xl font-space-grotesk">Lunaris</span>
+                        <span className="text-[#fbfff5] font-bold text-2xl font-space-grotesk">
+                            Lunaris
+                        </span>
                     </div>
 
                     <div className="flex items-center gap-11">
                         <Link
                             href="/"
                             className={`text-lg font-normal font-space-grotesk transition-colors ${
-                                isActive("/") ? "text-[#fbfff5]" : "text-[#fbfff5] hover:text-[#e1ff9a]"
+                                isActive("/")
+                                    ? "text-[#fbfff5]"
+                                    : "text-[#fbfff5] hover:text-[#e1ff9a]"
                             }`}
                         >
                             Home
@@ -32,7 +36,9 @@ export function Navbar() {
                         <Link
                             href="/browse"
                             className={`text-lg font-normal font-space-grotesk transition-colors ${
-                                isActive("/browse") ? "text-[#fbfff5]" : "text-[#fbfff5] hover:text-[#e1ff9a]"
+                                isActive("/browse")
+                                    ? "text-[#fbfff5]"
+                                    : "text-[#fbfff5] hover:text-[#e1ff9a]"
                             }`}
                         >
                             My Games
@@ -40,7 +46,9 @@ export function Navbar() {
                         <Link
                             href="/topup"
                             className={`text-lg font-normal font-space-grotesk transition-colors ${
-                                isActive("/topup") ? "text-[#e1ff9a]" : "text-[#fbfff5] hover:text-[#e1ff9a]"
+                                isActive("/topup")
+                                    ? "text-[#e1ff9a]"
+                                    : "text-[#fbfff5] hover:text-[#e1ff9a]"
                             }`}
                         >
                             Top-Up

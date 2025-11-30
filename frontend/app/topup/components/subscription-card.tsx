@@ -23,7 +23,9 @@ export function SubscriptionCard({
             <div className="mb-12">
                 <h3 className="text-white">
                     <span className="text-2xl font-semibold font-sora">{title}</span>
-                    <span className="font-normal text-base ml-2 font-space-grotesk">{subtitle}</span>
+                    <span className="font-normal text-base ml-2 font-space-grotesk">
+                        {subtitle}
+                    </span>
                 </h3>
             </div>
 
@@ -31,14 +33,11 @@ export function SubscriptionCard({
                 {features.map((feature, index) => (
                     <div key={index} className="flex items-start gap-3">
                         <div className="flex-shrink-0 w-6 h-6">
-                            <Image
-                                src="/support.svg"
-                                alt="Feature icon"
-                                width={24}
-                                height={24}
-                            />
+                            <Image src="/support.svg" alt="Feature icon" width={24} height={24} />
                         </div>
-                        <span className="text-white text-sm font-normal font-space-grotesk">{feature}</span>
+                        <span className="text-white text-sm font-normal font-space-grotesk">
+                            {feature}
+                        </span>
                     </div>
                 ))}
             </div>
@@ -50,7 +49,9 @@ export function SubscriptionCard({
                 <div className="flex items-center justify-between">
                     <div className="flex items-baseline gap-1">
                         <span className="text-white text-2xl font-semibold font-sora">{price}</span>
-                        <span className="text-white text-base font-normal font-space-grotesk">{priceUnit}</span>
+                        <span className="text-white text-base font-normal font-space-grotesk">
+                            {priceUnit}
+                        </span>
                     </div>
                     <Button
                         className="rounded-2xl px-4 py-2 font-normal text-lg border bg-[rgba(230,218,246,0.1)] border-[#e1ff9a] text-[#fbfff5] hover:bg-[rgba(230,218,246,0.2)] font-space-grotesk"

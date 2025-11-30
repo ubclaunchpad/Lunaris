@@ -33,7 +33,7 @@ export const handler = async (
     const db = new DynamoDBWrapper(process.env.RUNNING_STREAMS_TABLE_NAME);
     const now = new Date().toISOString();
     const streamingLink = `https://${event.dcvIp}:${event.dcvPort}`;
-    
+
     const payload = {
         userId: event.userId,
         instanceId: event.instanceId,
@@ -46,11 +46,7 @@ export const handler = async (
         updatedAt: now,
     };
 
-    const stateMachineName = "UserDeployEC2Workflow";
-    const region = process.env.AWS_REGION || "us-west-2";
-    const accountId = process.env.AWS_ACCOUNT_ID || context.invokedFunctionArn.split(":")[4];
-
-    const expressionAttributeValues: Record<string, any> = {
+    const expressionAttributeValues: Record<string, string | number> = {
         ":instanceId": payload.instanceId,
         ":dcvIp": payload.dcvIp,
         ":dcvPort": payload.dcvPort,

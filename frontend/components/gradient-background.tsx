@@ -5,7 +5,7 @@
 export function GradientBackground() {
     return (
         <div className="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
-            <div 
+            <div
                 className="absolute inset-0 bg-gradient-to-br from-[#1a3a3a] via-[#0d1f23] to-[#0a1114]"
                 style={{
                     backgroundImage: `

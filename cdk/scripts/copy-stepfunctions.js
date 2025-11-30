@@ -27,7 +27,12 @@ function copyRecursive(src, dest) {
             copyRecursive(srcPath, destPath);
         } else {
             // Only copy compiled files (.js, .d.ts, .map) and definition files (.json, .asl.json)
-            if (file.endsWith('.js') || file.endsWith('.d.ts') || file.endsWith('.map') || file.endsWith('.json')) {
+            if (
+                file.endsWith(".js") ||
+                file.endsWith(".d.ts") ||
+                file.endsWith(".map") ||
+                file.endsWith(".json")
+            ) {
                 fs.copyFileSync(srcPath, destPath);
             }
         }

@@ -1,5 +1,4 @@
-import { _InstanceType } from "@aws-sdk/client-ec2";
-import EC2Wrapper, { EC2InstanceResult, type EC2InstanceConfig } from "../../utils/ec2Wrapper";
+import EC2Wrapper, { type EC2InstanceConfig } from "../../utils/ec2Wrapper";
 import SSMWrapper from "../../utils/ssmWrapper";
 
 type DeployEc2Event = {
@@ -26,7 +25,7 @@ export const handler = async (
     try {
         const ssmWrapper = new SSMWrapper();
         const amiId = await ssmWrapper.getParamFromParamStore("ami_id");
-        
+
         if (!amiId) {
             throw new Error("AMI ID not found in Parameter Store");
         }
