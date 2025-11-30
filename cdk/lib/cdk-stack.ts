@@ -117,10 +117,11 @@ export class CdkStack extends Stack {
             }),
         );
 
-        // Create API Gateway with Cognito authorizer
+        // Create API Gateway without Cognito authorizer (for testing)
+        // To enable authentication, pass: userPool: cognitoUserPool.userPool
         const apiGateway = new ApiGateway(this, "ApiGateway", {
             apiFunction: lambdaFunctions.apiFunction,
-            userPool: cognitoUserPool.userPool,
+            // userPool: cognitoUserPool.userPool, // Commented out for testing without auth
         });
     }
 }

@@ -1,21 +1,21 @@
 export interface DeployInstanceRequest {
     userId: string;
-    instanceType?: string;
-    amiId: string;
 }
 
 export interface DeployInstanceResponse {
     message: string;
-    instanceId: string;
     status?: string;
+    statusCode?: number;
 }
 
 export interface TerminateInstanceRequest {
     userId: string;
+    instanceId: string;
 }
 
 export interface TerminateInstanceResponse {
     message: string;
+    status?: string;
 }
 
 export interface GetStreamingLinkRequest {
@@ -23,8 +23,10 @@ export interface GetStreamingLinkRequest {
 }
 
 export interface GetStreamingLinkResponse {
-    userId: string;
+    userId?: string;
     message: string;
+    error?: string;
+    [key: string]: any;
 }
 
 export interface GetDeploymentStatusRequest {
@@ -69,7 +71,9 @@ class ApiClient {
 
     constructor() {
         this.baseUrl =
-            process.env.NEXT_PUBLIC_API_GATEWAY_URL || process.env.NEXT_PUBLIC_API_URL || "";
+            process.env.NEXT_PUBLIC_API_GATEWAY_URL || 
+            process.env.NEXT_PUBLIC_API_URL || 
+            "https://snmonwfes7.execute-api.us-west-2.amazonaws.com/prod";
         this.isDevelopment = process.env.NODE_ENV === "development";
 
         if (!this.baseUrl) {

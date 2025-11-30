@@ -4,6 +4,7 @@ import {
     LambdaIntegration,
     CognitoUserPoolsAuthorizer,
     AuthorizationType,
+    Cors,
 } from "aws-cdk-lib/aws-apigateway";
 import { Function } from "aws-cdk-lib/aws-lambda";
 import * as cognito from "aws-cdk-lib/aws-cognito";
@@ -24,6 +25,18 @@ export class ApiGateway extends Construct {
             handler: props.apiFunction,
             proxy: false,
             description: "LunarisAPI",
+            defaultCorsPreflightOptions: {
+                allowOrigins: Cors.ALL_ORIGINS,
+                allowMethods: Cors.ALL_METHODS,
+                allowHeaders: [
+                    "Content-Type",
+                    "X-Amz-Date",
+                    "Authorization",
+                    "X-Api-Key",
+                    "X-Amz-Security-Token",
+                ],
+                allowCredentials: true,
+            },
         });
 
         // Create Cognito Authorizer if User Pool is provided
