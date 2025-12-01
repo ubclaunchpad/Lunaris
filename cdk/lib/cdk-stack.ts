@@ -8,6 +8,7 @@ import { ApiGateway } from "./constructs/api-gateway";
 import { DynamoDbTables } from "./constructs/dynamodb-tables";
 import { CognitoUserPool } from "./constructs/cognito-user-pool";
 import { EC2InstanceRole } from "./constructs/ec2-instance-role";
+import { DCVSecurityGroup } from "./constructs/dcv-security-group";
 
 export class CdkStack extends Stack {
     constructor(scope: Construct, id: string, props?: StackProps) {
@@ -28,12 +29,16 @@ export class CdkStack extends Stack {
         // Create EC2 Instance Role for DCV instances (enables SSM access)
         const ec2InstanceRole = new EC2InstanceRole(this, "EC2InstanceRole");
 
+        // Create Security Group for DCV instances (ports 8443, 80, 3389)
+        const dcvSecurityGroup = new DCVSecurityGroup(this, "DCVSecurityGroup");
+
         // Create API Lambda functions
         const lambdaFunctions = new LambdaFunctions(this, "LambdaFunctions", {
             runningInstancesTable: dynamoDbTables.runningInstancesTable,
             runningStreamsTable: dynamoDbTables.runningStreamsTable,
             ec2InstanceProfileArn: ec2InstanceRole.instanceProfileArn,
             ec2InstanceProfileName: ec2InstanceRole.instanceProfileName,
+            dcvSecurityGroupId: dcvSecurityGroup.securityGroupId,
         });
 
         // Grant EC2 permissions to unified API Lambda
@@ -72,6 +77,7 @@ export class CdkStack extends Stack {
         const stepFunctions = new StepFunctions(this, "StepFunctions", {
             checkRunningStreamsFunction: lambdaFunctions.checkRunningStreamsFunction,
             deployEC2Function: lambdaFunctions.deployEC2Function,
+            configureDcvInstanceFunction: lambdaFunctions.configureDcvInstanceFunction,
             updateRunningStreamsFunction: lambdaFunctions.updateRunningStreamsFunction,
             checkRunningStreamsTerminateFunction:
                 lambdaFunctions.checkRunningStreamsTerminateFunction,

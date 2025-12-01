@@ -7,6 +7,7 @@ import { WorkflowRegistry } from "../workflows";
 export interface StepFunctionsProps extends Record<string, Function> {
     readonly checkRunningStreamsFunction: Function;
     readonly deployEC2Function: Function;
+    readonly configureDcvInstanceFunction: Function;
     readonly updateRunningStreamsFunction: Function;
     readonly checkRunningStreamsTerminateFunction: Function;
     readonly terminateEC2Function: Function;

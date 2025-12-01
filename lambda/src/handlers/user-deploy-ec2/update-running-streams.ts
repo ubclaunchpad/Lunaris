@@ -32,7 +32,11 @@ export const handler = async (
 
     const db = new DynamoDBWrapper(process.env.RUNNING_STREAMS_TABLE_NAME);
     const now = new Date().toISOString();
-    const streamingLink = `https://${event.dcvIp}:${event.dcvPort}`;
+
+    // Use nip.io domain for valid SSL certificates
+    // The EC2 instance automatically requests a Let's Encrypt cert for this domain
+    const nipDomain = event.dcvIp.replace(/\./g, "-") + ".nip.io";
+    const streamingLink = `https://${nipDomain}:${event.dcvPort}`;
 
     const payload = {
         userId: event.userId,

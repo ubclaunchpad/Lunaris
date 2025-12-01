@@ -37,7 +37,8 @@ export class DynamoDbTables extends Construct {
         const table = new Table(this, "RunningStreams", {
             partitionKey: { name: "instanceArn", type: AttributeType.STRING },
             billingMode: BillingMode.PAY_PER_REQUEST,
-            encryption: TableEncryption.AWS_MANAGED, // Encrypt at rest with AWS-managed keys
+            // Note: Encryption setting removed to avoid AWS rate limiting
+            // DynamoDB tables are encrypted by default with AWS-owned keys
             removalPolicy: RemovalPolicy.DESTROY, // Use RETAIN for production
         });
 
