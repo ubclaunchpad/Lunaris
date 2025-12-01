@@ -105,6 +105,7 @@ class DynamoDBWrapper {
             ExpressionAttributeValues: {
                 ":userId": userId,
             },
+            ScanIndexForward: false, // Sort descending by creationTime to get most recent first
         });
     }
 

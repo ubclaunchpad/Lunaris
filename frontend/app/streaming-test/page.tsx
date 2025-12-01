@@ -1,8 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { DCVViewerSimple } from "@/components/dcv-viewer-simple";
-import { apiClient } from "@/lib/api-client";
+import {
+    apiClient,
+    type GetDeploymentStatusResponse,
+    type DeploymentStatus,
+} from "@/lib/api-client";
+import { useDeploymentStatus } from "@/lib/hooks/useDeploymentStatus";
 
 interface StreamingSession {
     streamingLink: string;
@@ -18,8 +23,9 @@ interface StreamingSession {
  *
  * This page allows you to:
  * 1. Deploy a new EC2 gaming instance
- * 2. Fetch streaming credentials from the API
- * 3. Connect and view the remote desktop via DCV
+ * 2. Automatically polls deployment status until ready
+ * 3. Fetch streaming credentials from the API
+ * 4. Connect and view the remote desktop via DCV
  *
  * MVP Note: Password is returned from backend for DCV SDK authentication.
  * Production should use DCV Session Connection Broker for token-based auth.
@@ -34,12 +40,111 @@ export default function StreamingTestPage() {
     const [loading, setLoading] = useState(false);
     const [deploying, setDeploying] = useState(false);
     const [hasCredentials, setHasCredentials] = useState(false);
+    const [deploymentComplete, setDeploymentComplete] = useState(false);
 
-    const addLog = (msg: string) => {
+    const addLog = useCallback((msg: string) => {
         const timestamp = new Date().toLocaleTimeString();
         setLogs((prev) => [...prev, `[${timestamp}] ${msg}`]);
-    };
+    }, []);
 
+    // Track previous step to avoid duplicate logs
+    const [lastLoggedStep, setLastLoggedStep] = useState<string | null>(null);
+
+    // Handle deployment status changes
+    const handleStatusChange = useCallback(
+        (status: DeploymentStatus, response: GetDeploymentStatusResponse) => {
+            if (status === "RUNNING") {
+                // Only log if step changed
+                const stepKey = `${response.currentStep}-${response.stepNumber}`;
+                if (stepKey !== lastLoggedStep) {
+                    const progressInfo =
+                        response.progress !== undefined ? ` (${response.progress}% complete)` : "";
+                    const stepInfo =
+                        response.stepNumber && response.totalSteps
+                            ? ` [Step ${response.stepNumber}/${response.totalSteps}]`
+                            : "";
+                    addLog(
+                        `⏳${stepInfo} ${response.currentStepName || response.message}${progressInfo}`,
+                    );
+                    setLastLoggedStep(stepKey);
+                }
+            } else if (status === "NOT_FOUND") {
+                if (lastLoggedStep !== "NOT_FOUND") {
+                    addLog(`🔍 Waiting for deployment to initialize...`);
+                    setLastLoggedStep("NOT_FOUND");
+                }
+            } else if (status === "FAILED") {
+                const errorInfo = response.errorStep
+                    ? ` at step "${response.failedAt || response.errorStep}"`
+                    : "";
+                addLog(`❌ Deployment failed${errorInfo}: ${response.message}`);
+                if (response.error) {
+                    addLog(`   Error type: ${response.error}`);
+                }
+            }
+        },
+        [addLog, lastLoggedStep],
+    );
+
+    // Handle deployment success
+    const handleDeploymentSuccess = useCallback(
+        (response: GetDeploymentStatusResponse) => {
+            addLog(`✅ Deployment complete! Instance is ready.`);
+            if (response.instanceId) {
+                addLog(`   Instance ID: ${response.instanceId}`);
+            }
+            if (response.dcvUrl) {
+                addLog(`   DCV URL: ${response.dcvUrl}`);
+                setServerUrl(response.dcvUrl);
+            }
+            if (response.startedAt && response.completedAt) {
+                const duration = Math.round(
+                    (new Date(response.completedAt).getTime() -
+                        new Date(response.startedAt).getTime()) /
+                        1000,
+                );
+                addLog(`   Duration: ${Math.floor(duration / 60)}m ${duration % 60}s`);
+            }
+            setDeploymentComplete(true);
+            setDeploying(false);
+            addLog(`📋 Click "Get Session" to fetch streaming credentials`);
+        },
+        [addLog],
+    );
+
+    // Handle deployment error
+    const handleDeploymentError = useCallback(
+        (error: Error) => {
+            addLog(`❌ Deployment failed: ${error.message}`);
+            setDeploying(false);
+        },
+        [addLog],
+    );
+
+    // Set up deployment status polling
+    const {
+        status: deploymentStatus,
+        response: deploymentResponse,
+        isPolling,
+        isLoading: isPollingLoading,
+        startPolling,
+        stopPolling,
+    } = useDeploymentStatus({
+        userId,
+        pollInterval: 5000, // Poll every 5 seconds
+        onStatusChange: handleStatusChange,
+        onSuccess: handleDeploymentSuccess,
+        onError: handleDeploymentError,
+    });
+
+    // Stop polling when component unmounts or userId changes
+    useEffect(() => {
+        return () => {
+            stopPolling();
+        };
+    }, [userId, stopPolling]);
+
+    // Reset logged step when starting new deployment
     const deployInstance = async () => {
         if (!userId) {
             addLog("❌ Please enter a User ID");
@@ -47,16 +152,20 @@ export default function StreamingTestPage() {
         }
 
         setDeploying(true);
+        setDeploymentComplete(false);
+        setLastLoggedStep(null); // Reset step tracking
         addLog(`🚀 Deploying new EC2 instance for user: ${userId}...`);
-        addLog(`⏳ This may take 2-3 minutes...`);
+        addLog(`⏳ This may take 2-3 minutes. Status will update automatically...`);
 
         try {
             const response = await apiClient.deployInstance({ userId });
-            addLog(`✅ Deployment started: ${response.message}`);
-            addLog(`📋 Check back in a few minutes and click "Get Session" to connect`);
+            addLog(`✅ Deployment workflow started: ${response.message}`);
+
+            // Start polling for deployment status
+            addLog(`🔄 Monitoring deployment progress...`);
+            startPolling();
         } catch (error) {
             addLog(`❌ Deploy error: ${error instanceof Error ? error.message : "Unknown error"}`);
-        } finally {
             setDeploying(false);
         }
     };
@@ -180,19 +289,75 @@ export default function StreamingTestPage() {
                     <div className="flex gap-2">
                         <button
                             onClick={deployInstance}
-                            disabled={deploying || !userId}
+                            disabled={deploying || isPolling || !userId}
                             className="flex-1 py-2 bg-purple-600 rounded font-medium hover:bg-purple-700 transition-colors disabled:opacity-50"
                         >
-                            {deploying ? "Deploying..." : "🚀 Deploy Instance"}
+                            {isPolling
+                                ? "🔄 Deploying..."
+                                : deploying
+                                  ? "Starting..."
+                                  : "🚀 Deploy Instance"}
                         </button>
                         <button
                             onClick={fetchCredentials}
-                            disabled={loading || !userId}
+                            disabled={loading || !userId || isPolling}
                             className="flex-1 py-2 bg-green-600 rounded font-medium hover:bg-green-700 transition-colors disabled:opacity-50"
                         >
                             {loading ? "..." : "🔗 Get Session"}
                         </button>
                     </div>
+
+                    {/* Deployment Status Indicator */}
+                    {isPolling && (
+                        <div className="bg-blue-900/50 border border-blue-700 rounded-lg p-3 space-y-2">
+                            <div className="flex items-center gap-2">
+                                <div className="animate-spin h-4 w-4 border-2 border-blue-400 border-t-transparent rounded-full"></div>
+                                <span className="text-blue-300 text-sm flex-1">
+                                    {deploymentResponse?.currentStepName ||
+                                        (deploymentStatus === "NOT_FOUND"
+                                            ? "Initializing deployment..."
+                                            : "Checking status...")}
+                                </span>
+                                <button
+                                    onClick={stopPolling}
+                                    className="text-xs text-blue-400 hover:text-blue-300"
+                                >
+                                    Cancel
+                                </button>
+                            </div>
+                            {/* Progress bar */}
+                            {deploymentResponse?.progress !== undefined &&
+                                deploymentResponse.progress > 0 && (
+                                    <div className="space-y-1">
+                                        <div className="flex justify-between text-xs text-blue-400">
+                                            <span>
+                                                Step {deploymentResponse.stepNumber}/
+                                                {deploymentResponse.totalSteps}
+                                            </span>
+                                            <span>{deploymentResponse.progress}%</span>
+                                        </div>
+                                        <div className="w-full bg-blue-950 rounded-full h-2">
+                                            <div
+                                                className="bg-blue-500 h-2 rounded-full transition-all duration-500"
+                                                style={{ width: `${deploymentResponse.progress}%` }}
+                                            ></div>
+                                        </div>
+                                    </div>
+                                )}
+                        </div>
+                    )}
+
+                    {/* Deployment Complete Indicator */}
+                    {deploymentComplete && !isPolling && (
+                        <div className="bg-green-900/50 border border-green-700 rounded-lg p-3">
+                            <div className="flex items-center gap-2">
+                                <span className="text-green-400">✓</span>
+                                <span className="text-green-300 text-sm">
+                                    Instance deployed! Click "Get Session" to connect.
+                                </span>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Server URL (auto-filled after Get Session) */}
                     {serverUrl && (
