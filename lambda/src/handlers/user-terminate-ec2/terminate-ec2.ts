@@ -32,7 +32,7 @@ async function findUserInstance(
     // Pick the newest instance by creationTime
     items.sort((a, b) => (b.creationTime || "").localeCompare(a.creationTime || ""));
 
-    return items[0]; 
+    return items[0];
 }
 
 async function terminateWorkflow(
@@ -111,13 +111,13 @@ export const handler = async (event: TerminateEc2Event): Promise<TerminateEc2Res
 
         const runningInstance = await findUserInstance(runningInstancesTable, userId);
 
-         if (!runningInstance) {
+        if (!runningInstance) {
             throw new Error("No instance found for user");
         }
         if (runningInstance.userId !== userId) {
             throw new Error(`Instance does not belong to user ${userId}`);
-        }       
-        
+        }
+
         const instanceId = runningInstance.instanceId;
 
         if (runningInstance.status === "terminated") {
