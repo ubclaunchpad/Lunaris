@@ -42,6 +42,13 @@ interface ResponseBody {
     message: string;
     status?: string;
     statusCode?: number;
+    sessionId?: string;
+    authToken?: string;
+    streamingLink?: string;
+    dcvUser?: string;
+    instanceArn?: string;
+    updatedAt?: string;
+    [key: string]: unknown; // Allow other properties from streamRecord
 }
 
 // Helper function to format responses consistently
@@ -313,9 +320,19 @@ const handleStreamingLink = async (event: APIGatewayProxyEvent): Promise<APIGate
 
         console.log(`Found streaming session for userId ${userId}:`, streamRecord);
 
+        // Extract sessionId from streamRecord or generate from userId
+        // sessionId is typically the session name created by DCV
+        const sessionId = streamRecord.sessionId || `user-${userId}-session`;
+
+        // For DCV Web Client SDK, we can use a simple token or session identifier
+        // In this case, we'll use the sessionId as the auth token for self-signed certificates
+        const authToken = streamRecord.authToken || sessionId;
+
         return createResponse(200, {
             message: "Streaming session found",
             ...streamRecord,
+            sessionId,
+            authToken,
         });
     } catch (error: unknown) {
         if (error instanceof Error) {

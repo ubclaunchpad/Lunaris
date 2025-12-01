@@ -83,6 +83,35 @@ class ApiClient {
         }
     }
 
+    private logRequest(method: string, url: string, body?: string) {
+        const style = "color: #0066cc; font-weight: bold;";
+        console.group(`%c[API Request] ${method} ${url}`, style);
+        if (body) {
+            try {
+                const parsed = JSON.parse(body);
+                console.table(parsed);
+            } catch {
+                console.log(body);
+            }
+        } else {
+            console.log("No request body");
+        }
+        console.groupEnd();
+    }
+
+    private logResponse(status: number, statusText: string, data: unknown) {
+        const isError = status >= 400;
+        const style = isError
+            ? "color: #cc0000; font-weight: bold;"
+            : "color: #00aa00; font-weight: bold;";
+        console.group(`%c[API Response] ${status} ${statusText}`, style);
+        console.log("Status:", status);
+        if (data) {
+            console.table(data);
+        }
+        console.groupEnd();
+    }
+
     private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
         const url = `${this.baseUrl}${endpoint}`;
         const requestOptions: RequestInit = {
@@ -94,31 +123,21 @@ class ApiClient {
         };
 
         if (this.isDevelopment) {
-            console.log(`[API Client] ${options.method || "GET"} ${url}`, {
-                body: options.body,
-            });
+            this.logRequest(options.method || "GET", url, options.body as string);
         }
 
         try {
             const response = await fetch(url, requestOptions);
+            const data = await response.json().catch(() => ({}));
 
             if (this.isDevelopment) {
-                console.log(`[API Client] Response:`, {
-                    status: response.status,
-                    statusText: response.statusText,
-                });
+                this.logResponse(response.status, response.statusText, data);
             }
-
-            const data = await response.json().catch(() => ({}));
 
             if (!response.ok) {
                 const errorMessage =
                     data.message || data.error || `HTTP ${response.status}: ${response.statusText}`;
                 throw new ApiError(response.status, errorMessage, data.error);
-            }
-
-            if (this.isDevelopment) {
-                console.log(`[API Client] Response data:`, data);
             }
 
             return data as T;
