@@ -325,7 +325,10 @@ const handleStreamingLink = async (event: APIGatewayProxyEvent): Promise<APIGate
         const dcvPort = streamRecord.dcvPort || 8443;
         const dcvUser = streamRecord.dcvUser || "Administrator";
         const dcvPassword = streamRecord.dcvPassword;
-        const streamingLink = streamRecord.streamingLink || `https://${dcvHost}:${dcvPort}`;
+
+        // Use nip.io domain for valid SSL certificates (fallback if not stored)
+        const nipDomain = dcvHost ? dcvHost.replace(/\./g, "-") + ".nip.io" : "";
+        const streamingLink = streamRecord.streamingLink || `https://${nipDomain}:${dcvPort}`;
 
         // Session ID for DCV connection (default console session)
         const sessionId = "console";

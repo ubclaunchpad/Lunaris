@@ -9,6 +9,7 @@ export interface LambdaFunctionsProps {
     readonly runningStreamsTable: ITable;
     readonly ec2InstanceProfileArn?: string;
     readonly ec2InstanceProfileName?: string;
+    readonly dcvSecurityGroupId?: string;
 }
 
 export class LambdaFunctions extends Construct {
@@ -81,6 +82,7 @@ export class LambdaFunctions extends Construct {
                 LAMBDA_REGION: process.env.AWS_REGION || "us-west-2",
                 EC2_INSTANCE_PROFILE_ARN: props.ec2InstanceProfileArn || "",
                 EC2_INSTANCE_PROFILE_NAME: props.ec2InstanceProfileName || "",
+                SECURITY_GROUP_ID: props.dcvSecurityGroupId || "",
             },
         });
 

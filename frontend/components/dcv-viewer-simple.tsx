@@ -123,16 +123,26 @@ export function DCVViewerSimple({
         authStartedRef.current = true;
 
         const dcv = dcvRef.current;
-        dcv.setLogLevel(1); // WARN level (less verbose)
+        dcv.setLogLevel(0); // DEBUG level for more verbose logging
+
+        console.log("[DCV] Starting authentication to:", serverUrl);
+        console.log(
+            "[DCV] Credentials provided - username:",
+            credentials.username,
+            "password length:",
+            credentials.password?.length,
+        );
 
         // DCV SDK authentication flow - use credentials
         authHandlerRef.current = dcv.authenticate(serverUrl, {
             promptCredentials: () => {
                 if (!mountedRef.current) return;
+                console.log("[DCV] promptCredentials called");
                 setNeedsCredentials(true);
 
                 // If we have credentials, send them automatically
                 if (credentials.username && credentials.password) {
+                    console.log("[DCV] Auto-sending credentials for user:", credentials.username);
                     authHandlerRef.current.sendCredentials(credentials);
                 }
             },
@@ -140,6 +150,10 @@ export function DCVViewerSimple({
             success: (authenticationData: any, sessionList: any) => {
                 if (!mountedRef.current) return;
                 setNeedsCredentials(false);
+
+                console.log("[DCV] Authentication SUCCESS!");
+                console.log("[DCV] authenticationData:", authenticationData);
+                console.log("[DCV] sessionList:", sessionList);
 
                 // Extract session info from sessionList
                 let sessionId = "console";
@@ -172,6 +186,11 @@ export function DCVViewerSimple({
             error: (authError: any) => {
                 if (!mountedRef.current) return;
                 console.error("DCV authentication error:", authError);
+                console.error("[DCV] Auth error details:", JSON.stringify(authError, null, 2));
+
+                // Try to get more error details
+                if (authError.code) console.error("[DCV] Error code:", authError.code);
+                if (authError.reason) console.error("[DCV] Error reason:", authError.reason);
 
                 const errorMsg = authError.message || String(authError);
                 if (errorMsg.includes("1006") || errorMsg.includes("WebSocket")) {
