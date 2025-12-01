@@ -78,7 +78,6 @@ export class LambdaFunctions extends Construct {
             description: "Deploys EC2 instance as part of user deployment workflow",
             environment: {
                 RUNNING_INSTANCES_TABLE: props.runningInstancesTable.tableName,
-                DCV_PASSWORD: "vgw)l-%zpiGlvLsH;bIbB3t.B&C2@grQ",
                 LAMBDA_REGION: process.env.AWS_REGION || "us-west-2",
                 EC2_INSTANCE_PROFILE_ARN: props.ec2InstanceProfileArn || "",
                 EC2_INSTANCE_PROFILE_NAME: props.ec2InstanceProfileName || "",

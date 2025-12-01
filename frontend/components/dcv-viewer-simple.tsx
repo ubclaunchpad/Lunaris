@@ -11,12 +11,9 @@ import React, { useEffect, useRef, useState, useCallback } from "react";
 
 interface DCVViewerSimpleProps {
     serverUrl: string;
-    // Optional: pre-fill credentials
+    // Credentials for DCV authentication
     username?: string;
     password?: string;
-    // Optional: if you have a valid DCV session token (from external auth)
-    sessionId?: string;
-    authToken?: string;
     onConnect?: () => void;
     onDisconnect?: (reason: any) => void;
     onError?: (error: any) => void;
@@ -49,12 +46,18 @@ async function loadDCVSDK(): Promise<any> {
                 if (window.dcv) {
                     resolve(window.dcv);
                 } else {
+                    // Reset promise so it can be retried
+                    sdkLoadPromise = null;
                     reject(new Error("DCV SDK loaded but not accessible"));
                 }
             }, 100);
         };
 
-        script.onerror = () => reject(new Error("Failed to load DCV SDK script"));
+        script.onerror = () => {
+            // Reset promise so it can be retried
+            sdkLoadPromise = null;
+            reject(new Error("Failed to load DCV SDK script"));
+        };
 
         document.head.appendChild(script);
     });
@@ -66,15 +69,13 @@ export function DCVViewerSimple({
     serverUrl,
     username = "",
     password = "",
-    sessionId,
-    authToken,
     onConnect,
     onDisconnect,
     onError,
 }: DCVViewerSimpleProps) {
-    const [status, setStatus] = useState<"loading" | "authenticating" | "connected" | "error">(
-        "loading",
-    );
+    const [status, setStatus] = useState<
+        "loading" | "authenticating" | "ready-to-connect" | "connected" | "error"
+    >("loading");
     const [error, setError] = useState<string>("");
     const [credentials, setCredentials] = useState({ username, password });
     const [needsCredentials, setNeedsCredentials] = useState(false);
@@ -85,6 +86,11 @@ export function DCVViewerSimple({
     const connectionRef = useRef<any>(null);
     const authStartedRef = useRef(false); // Prevent multiple auth attempts
     const mountedRef = useRef(true); // Track if component is mounted
+
+    // Sync credentials when props change
+    useEffect(() => {
+        setCredentials({ username, password });
+    }, [username, password]);
 
     // Load SDK on mount
     useEffect(() => {
@@ -119,7 +125,7 @@ export function DCVViewerSimple({
         const dcv = dcvRef.current;
         dcv.setLogLevel(1); // WARN level (less verbose)
 
-        // DCV SDK authentication flow
+        // DCV SDK authentication flow - use credentials
         authHandlerRef.current = dcv.authenticate(serverUrl, {
             promptCredentials: () => {
                 if (!mountedRef.current) return;
@@ -137,20 +143,20 @@ export function DCVViewerSimple({
 
                 // Extract session info from sessionList
                 let sessionId = "console";
-                let authToken = "";
+                let sessionToken = "";
 
                 if (Array.isArray(sessionList) && sessionList.length > 0) {
                     const session = sessionList[0];
                     sessionId = session.sessionId || session.id || sessionId;
-                    authToken = session.authToken || session.authenticationToken || "";
+                    sessionToken = session.authToken || session.authenticationToken || "";
                 }
 
                 // Fallback: check if authHandler has methods to get the token
-                if (!authToken && authenticationData) {
+                if (!sessionToken && authenticationData) {
                     if (typeof authenticationData.getAuthToken === "function") {
-                        authToken = authenticationData.getAuthToken();
+                        sessionToken = authenticationData.getAuthToken();
                     } else if (typeof authenticationData.getSessionToken === "function") {
-                        authToken = authenticationData.getSessionToken();
+                        sessionToken = authenticationData.getSessionToken();
                     }
                 }
 
@@ -158,7 +164,7 @@ export function DCVViewerSimple({
                 setStatus("ready-to-connect");
                 setTimeout(() => {
                     if (mountedRef.current) {
-                        connectToSession(dcv, sessionId, authToken);
+                        connectToSession(dcv, sessionId, sessionToken);
                     }
                 }, 100);
             },

@@ -320,19 +320,32 @@ const handleStreamingLink = async (event: APIGatewayProxyEvent): Promise<APIGate
 
         console.log(`Found streaming session for userId ${userId}:`, streamRecord);
 
-        // Extract sessionId from streamRecord or generate from userId
-        // sessionId is typically the session name created by DCV
-        const sessionId = streamRecord.sessionId || `user-${userId}-session`;
+        // Extract connection details
+        const dcvHost = streamRecord.dcvIp;
+        const dcvPort = streamRecord.dcvPort || 8443;
+        const dcvUser = streamRecord.dcvUser || "Administrator";
+        const dcvPassword = streamRecord.dcvPassword;
+        const streamingLink = streamRecord.streamingLink || `https://${dcvHost}:${dcvPort}`;
 
-        // For DCV Web Client SDK, we can use a simple token or session identifier
-        // In this case, we'll use the sessionId as the auth token for self-signed certificates
-        const authToken = streamRecord.authToken || sessionId;
+        // Session ID for DCV connection (default console session)
+        const sessionId = "console";
 
+        // Return session info WITH password for MVP
+        // NOTE: In production, implement proper token-based auth via DCV Session Connection Broker
+        // For MVP, the DCV Web SDK requires credentials for WebSocket authentication
         return createResponse(200, {
             message: "Streaming session found",
-            ...streamRecord,
+            userId: streamRecord.userId,
+            instanceId: streamRecord.instanceId,
+            instanceArn: streamRecord.instanceArn,
+            streamingLink,
+            dcvIp: dcvHost,
+            dcvPort,
+            dcvUser,
+            dcvPassword, // Included for MVP - DCV SDK requires credentials
             sessionId,
-            authToken,
+            createdAt: streamRecord.createdAt,
+            updatedAt: streamRecord.updatedAt,
         });
     } catch (error: unknown) {
         if (error instanceof Error) {

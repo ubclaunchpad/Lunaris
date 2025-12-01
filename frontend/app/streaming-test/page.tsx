@@ -2,26 +2,27 @@
 
 import { useState } from "react";
 import { DCVViewerSimple } from "@/components/dcv-viewer-simple";
-
-const API_BASE_URL = "https://snmonwfes7.execute-api.us-west-2.amazonaws.com/prod";
+import { apiClient } from "@/lib/api-client";
 
 interface StreamingSession {
     streamingLink: string;
     dcvUser: string;
-    dcvPassword: string;
+    dcvPassword?: string;
     dcvIp: string;
     dcvPort: number;
     sessionId?: string;
-    authToken?: string;
 }
 
 /**
- * Simple test page for DCV streaming
+ * Simple test page for DCV streaming (MVP)
  *
  * This page allows you to:
- * 1. Enter a userId to fetch credentials from the API
- * 2. Or manually enter server URL and credentials
- * 3. Connect and view the remote desktop
+ * 1. Deploy a new EC2 gaming instance
+ * 2. Fetch streaming credentials from the API
+ * 3. Connect and view the remote desktop via DCV
+ *
+ * MVP Note: Password is returned from backend for DCV SDK authentication.
+ * Production should use DCV Session Connection Broker for token-based auth.
  */
 export default function StreamingTestPage() {
     const [serverUrl, setServerUrl] = useState("");
@@ -31,10 +32,33 @@ export default function StreamingTestPage() {
     const [showViewer, setShowViewer] = useState(false);
     const [logs, setLogs] = useState<string[]>([]);
     const [loading, setLoading] = useState(false);
+    const [deploying, setDeploying] = useState(false);
+    const [hasCredentials, setHasCredentials] = useState(false);
 
     const addLog = (msg: string) => {
         const timestamp = new Date().toLocaleTimeString();
         setLogs((prev) => [...prev, `[${timestamp}] ${msg}`]);
+    };
+
+    const deployInstance = async () => {
+        if (!userId) {
+            addLog("❌ Please enter a User ID");
+            return;
+        }
+
+        setDeploying(true);
+        addLog(`🚀 Deploying new EC2 instance for user: ${userId}...`);
+        addLog(`⏳ This may take 2-3 minutes...`);
+
+        try {
+            const response = await apiClient.deployInstance({ userId });
+            addLog(`✅ Deployment started: ${response.message}`);
+            addLog(`📋 Check back in a few minutes and click "Get Session" to connect`);
+        } catch (error) {
+            addLog(`❌ Deploy error: ${error instanceof Error ? error.message : "Unknown error"}`);
+        } finally {
+            setDeploying(false);
+        }
     };
 
     const fetchCredentials = async () => {
@@ -47,24 +71,25 @@ export default function StreamingTestPage() {
         addLog(`🔍 Fetching credentials for user: ${userId}...`);
 
         try {
-            const response = await fetch(
-                `${API_BASE_URL}/streamingLink?userId=${encodeURIComponent(userId)}`,
-            );
-            const data = await response.json();
+            const data = await apiClient.getStreamingLink({ userId });
+            const session = data as unknown as StreamingSession;
 
-            if (!response.ok) {
-                throw new Error(data.message || "Failed to fetch streaming session");
-            }
-
-            const session = data as StreamingSession;
             addLog(`✅ Found streaming session!`);
             addLog(`   Server: ${session.streamingLink}`);
             addLog(`   User: ${session.dcvUser}`);
 
-            // Auto-fill the form
+            // Auto-fill the form with credentials
             setServerUrl(session.streamingLink);
             setUsername(session.dcvUser);
-            setPassword(session.dcvPassword);
+
+            if (session.dcvPassword) {
+                setPassword(session.dcvPassword);
+                setHasCredentials(true);
+                addLog(`🔐 Credentials received - ready to connect`);
+            } else {
+                setHasCredentials(false);
+                addLog(`⚠️ No password in response - enter credentials manually`);
+            }
         } catch (error) {
             addLog(`❌ Error: ${error instanceof Error ? error.message : "Unknown error"}`);
         } finally {
@@ -78,7 +103,8 @@ export default function StreamingTestPage() {
             return;
         }
         if (!username || !password) {
-            addLog("⚠️ No credentials provided - you may be prompted to enter them");
+            addLog("⚠️ Missing credentials - please enter username and password");
+            return;
         }
         addLog(`🚀 Connecting to ${serverUrl}...`);
         setShowViewer(true);
@@ -131,78 +157,87 @@ export default function StreamingTestPage() {
         <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center p-4 pt-[100px]">
             <div className="w-full max-w-md space-y-6">
                 <div className="text-center">
-                    <h1 className="text-2xl font-bold mb-2">🖥️ DCV Streaming Test</h1>
+                    <h1 className="text-2xl font-bold mb-2">🖥️ Lunaris Cloud Gaming</h1>
                     <p className="text-gray-400 text-sm">
-                        Connect directly to a DCV server for testing
+                        Deploy and stream your cloud gaming instance
                     </p>
                 </div>
 
                 <div className="bg-gray-800 rounded-lg p-6 space-y-4">
-                    {/* Fetch from API section */}
-                    <div className="space-y-3">
-                        <label className="block text-sm font-medium">
-                            Fetch Credentials from API
-                        </label>
-                        <div className="flex gap-2">
-                            <input
-                                type="text"
-                                value={userId}
-                                onChange={(e) => setUserId(e.target.value)}
-                                placeholder="User ID (e.g., test123)"
-                                className="flex-1 px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-blue-500 outline-none"
-                            />
+                    {/* User ID input */}
+                    <div className="space-y-2">
+                        <label className="block text-sm font-medium">User ID</label>
+                        <input
+                            type="text"
+                            value={userId}
+                            onChange={(e) => setUserId(e.target.value)}
+                            placeholder="Enter your user ID"
+                            className="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-blue-500 outline-none"
+                        />
+                    </div>
+
+                    {/* Action buttons */}
+                    <div className="flex gap-2">
+                        <button
+                            onClick={deployInstance}
+                            disabled={deploying || !userId}
+                            className="flex-1 py-2 bg-purple-600 rounded font-medium hover:bg-purple-700 transition-colors disabled:opacity-50"
+                        >
+                            {deploying ? "Deploying..." : "🚀 Deploy Instance"}
+                        </button>
+                        <button
+                            onClick={fetchCredentials}
+                            disabled={loading || !userId}
+                            className="flex-1 py-2 bg-green-600 rounded font-medium hover:bg-green-700 transition-colors disabled:opacity-50"
+                        >
+                            {loading ? "..." : "🔗 Get Session"}
+                        </button>
+                    </div>
+
+                    {/* Server URL (auto-filled after Get Session) */}
+                    {serverUrl && (
+                        <div className="border-t border-gray-700 pt-4 space-y-3">
+                            <div>
+                                <label className="block text-sm font-medium mb-1">Server</label>
+                                <div className="px-3 py-2 bg-gray-700 rounded text-sm text-gray-300 truncate">
+                                    {serverUrl}
+                                </div>
+                            </div>
+
+                            {hasCredentials ? (
+                                <p className="text-xs text-green-500">
+                                    ✓ Credentials ready - click Start Streaming
+                                </p>
+                            ) : (
+                                <div className="space-y-2">
+                                    <p className="text-xs text-yellow-500 mb-2">
+                                        ⚠️ Enter credentials manually
+                                    </p>
+                                    <input
+                                        type="text"
+                                        value={username}
+                                        onChange={(e) => setUsername(e.target.value)}
+                                        placeholder="Username"
+                                        className="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-blue-500 outline-none text-sm"
+                                    />
+                                    <input
+                                        type="password"
+                                        value={password}
+                                        onChange={(e) => setPassword(e.target.value)}
+                                        placeholder="Password"
+                                        className="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-blue-500 outline-none text-sm"
+                                    />
+                                </div>
+                            )}
+
                             <button
-                                onClick={fetchCredentials}
-                                disabled={loading}
-                                className="px-4 py-2 bg-green-600 rounded font-medium hover:bg-green-700 transition-colors disabled:opacity-50"
+                                onClick={handleConnect}
+                                className="w-full py-3 bg-blue-600 rounded-lg font-medium hover:bg-blue-700 transition-colors"
                             >
-                                {loading ? "..." : "Fetch"}
+                                🎮 Start Streaming
                             </button>
                         </div>
-                        <p className="text-xs text-gray-500">
-                            Enter your User ID to auto-fill server URL and credentials
-                        </p>
-                    </div>
-
-                    <div className="border-t border-gray-700 pt-4">
-                        <label className="block text-sm font-medium mb-1">Server URL</label>
-                        <input
-                            type="text"
-                            value={serverUrl}
-                            onChange={(e) => setServerUrl(e.target.value)}
-                            placeholder="https://your-dcv-server:8443"
-                            className="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-blue-500 outline-none"
-                        />
-                    </div>
-
-                    <div className="space-y-3">
-                        <label className="block text-sm font-medium">Credentials</label>
-                        <input
-                            type="text"
-                            value={username}
-                            onChange={(e) => setUsername(e.target.value)}
-                            placeholder="Username"
-                            className="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-blue-500 outline-none"
-                        />
-                        <input
-                            type="password"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            placeholder="Password"
-                            className="w-full px-3 py-2 bg-gray-700 rounded border border-gray-600 focus:border-blue-500 outline-none"
-                        />
-                        {username && password && (
-                            <p className="text-xs text-green-500">✓ Credentials ready</p>
-                        )}
-                    </div>
-
-                    <button
-                        onClick={handleConnect}
-                        disabled={!serverUrl}
-                        className="w-full py-3 bg-blue-600 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50"
-                    >
-                        Connect to DCV Server
-                    </button>
+                    )}
                 </div>
 
                 {/* Logs */}

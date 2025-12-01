@@ -41,12 +41,13 @@ export class EC2InstanceRole extends Construct {
         );
 
         // Create instance profile
+        // Using a unique name based on the stack to avoid conflicts
         this.instanceProfile = new iam.CfnInstanceProfile(this, "DCVInstanceProfile", {
             roles: [this.role.roleName],
-            instanceProfileName: "lunaris-dcv-instance-profile",
         });
 
-        this.instanceProfileName = this.instanceProfile.instanceProfileName!;
+        // Use ref for the name since instanceProfileName isn't set explicitly
+        this.instanceProfileName = this.instanceProfile.ref;
         this.instanceProfileArn = this.instanceProfile.attrArn;
 
         // Output the instance profile ARN

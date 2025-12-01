@@ -1,5 +1,6 @@
 import EC2Wrapper, { type EC2InstanceConfig } from "../../utils/ec2Wrapper";
 import SSMWrapper from "../../utils/ssmWrapper";
+import { randomBytes } from "crypto";
 
 type DeployEc2Event = {
     userId: string;
@@ -19,6 +20,20 @@ type DeployEC2Error = {
     success: false;
     error: string;
 };
+
+/**
+ * Generates a cryptographically secure random password for DCV instances.
+ * Each instance gets a unique password that is stored in DynamoDB.
+ */
+function generateSecurePassword(length: number = 24): string {
+    const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*";
+    const bytes = randomBytes(length);
+    let password = "";
+    for (let i = 0; i < length; i++) {
+        password += charset[bytes[i] % charset.length];
+    }
+    return password;
+}
 
 /**
  * Generates a PowerShell user data script for Windows DCV instances.
@@ -84,7 +99,10 @@ export const handler = async (
         }
 
         const ec2Wrapper = new EC2Wrapper(process.env.LAMBDA_REGION || "us-west-2");
-        const dcvPassword = process.env.DCV_PASSWORD || "";
+
+        // Generate a unique password for this instance
+        // This password is stored in DynamoDB (encrypted at rest) alongside the session data
+        const dcvPassword = generateSecurePassword();
 
         const instanceConfig: EC2InstanceConfig = {
             userId: event.userId,
