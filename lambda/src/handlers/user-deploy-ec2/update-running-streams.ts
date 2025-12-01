@@ -1,5 +1,15 @@
 import DynamoDBWrapper from "../../utils/dynamoDbWrapper";
 import { Context } from "aws-lambda";
+import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import {
+    DynamoDBDocumentClient,
+    QueryCommand,
+    UpdateCommand,
+    DeleteCommand,
+} from "@aws-sdk/lib-dynamodb";
+
+const client = new DynamoDBClient({});
+const docClient = DynamoDBDocumentClient.from(client);
 
 type UpdateRunningStreamsEvent = {
     userId: string;
@@ -13,6 +23,7 @@ type UpdateRunningStreamsEvent = {
 
 type UpdateRunningStreamsResult = {
     success: boolean;
+    instanceId: string;
 };
 
 export const handler = async (
@@ -82,5 +93,63 @@ export const handler = async (
 
     await db.updateItem({ instanceArn: event.instanceArn }, updateConfig);
 
-    return { success: true };
+    // Also update the RunningInstances table to replace the placeholder instanceId with the real one
+    // This is crucial for terminate to work correctly
+    const runningInstancesTable = process.env.RUNNING_INSTANCES_TABLE;
+    if (runningInstancesTable) {
+        try {
+            // Find the placeholder record for this user
+            const queryCommand = new QueryCommand({
+                TableName: runningInstancesTable,
+                IndexName: "UserIdIndex",
+                KeyConditionExpression: "userId = :userId",
+                FilterExpression: "begins_with(instanceId, :prefix)",
+                ExpressionAttributeValues: {
+                    ":userId": event.userId,
+                    ":prefix": "pending-",
+                },
+            });
+            const queryResult = await docClient.send(queryCommand);
+
+            if (queryResult.Items && queryResult.Items.length > 0) {
+                const oldRecord = queryResult.Items[0];
+                const oldInstanceId = oldRecord.instanceId;
+
+                console.log(
+                    `Found placeholder record with instanceId: ${oldInstanceId}, updating to: ${event.instanceId}`,
+                );
+
+                // Delete the old placeholder record
+                const deleteCommand = new DeleteCommand({
+                    TableName: runningInstancesTable,
+                    Key: { instanceId: oldInstanceId },
+                });
+                await docClient.send(deleteCommand);
+
+                // Create new record with real instanceId
+                const { PutCommand } = await import("@aws-sdk/lib-dynamodb");
+                const putCommand = new PutCommand({
+                    TableName: runningInstancesTable,
+                    Item: {
+                        instanceId: event.instanceId,
+                        userId: event.userId,
+                        executionArn: oldRecord.executionArn,
+                        status: "running",
+                        creationTime: oldRecord.creationTime || now,
+                        lastModifiedTime: now,
+                    },
+                });
+                await docClient.send(putCommand);
+
+                console.log(
+                    `Updated RunningInstances table with real instanceId: ${event.instanceId}`,
+                );
+            }
+        } catch (error) {
+            console.error("Error updating RunningInstances table:", error);
+            // Don't fail the whole operation - RunningStreams was updated successfully
+        }
+    }
+
+    return { success: true, instanceId: event.instanceId };
 };

@@ -594,8 +594,10 @@ const handleDeploymentStatus = async (
             case "RUNNING":
                 return createResponse(200, {
                     status: "RUNNING",
-                    message: stepInfo?.currentStepName || "Deployment in progress...",
-                    deploymentStatus: "deploying",
+                    message:
+                        stepInfo?.currentStepName ||
+                        (isTerminate ? "Termination in progress..." : "Deployment in progress..."),
+                    deploymentStatus: isTerminate ? "terminating" : "deploying",
                     currentStep: stepInfo?.currentStep,
                     currentStepName: stepInfo?.currentStepName,
                     stepNumber: stepInfo?.stepNumber,
@@ -607,6 +609,21 @@ const handleDeploymentStatus = async (
 
             case "SUCCEEDED":
                 const output = exec.output ? JSON.parse(exec.output) : {};
+
+                if (isTerminate) {
+                    return createResponse(200, {
+                        status: "SUCCEEDED",
+                        message: "Instance has been terminated",
+                        deploymentStatus: "terminated",
+                        instanceId: output.instanceId || runningInstance.instanceId,
+                        progress: 100,
+                        totalSteps: stepInfo?.totalSteps,
+                        completedSteps: stepInfo?.completedSteps,
+                        startedAt: exec.startDate?.toISOString(),
+                        completedAt: exec.stopDate?.toISOString(),
+                    });
+                }
+
                 return createResponse(200, {
                     status: "SUCCEEDED",
                     message: "Instance is ready for streaming",
