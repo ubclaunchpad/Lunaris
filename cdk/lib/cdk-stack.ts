@@ -111,6 +111,18 @@ export class CdkStack extends Stack {
             }),
         );
 
+        // Grant permissions to check step function execution status
+        lambdaFunctions.apiFunction.addToRolePolicy(
+            new PolicyStatement({
+                effect: Effect.ALLOW,
+                actions: ["states:DescribeExecution", "states:GetExecutionHistory"],
+                resources: [
+                    `arn:aws:states:${this.region}:${this.account}:execution:${terminateWorkflow.stateMachineName}:*`,
+                    `arn:aws:states:${this.region}:${this.account}:execution:${deployWorkflow.stateMachineName}:*`,
+                ],
+            }),
+        );
+
         // Add Step Function ARNs as environment variables to unified API Lambda
         lambdaFunctions.apiFunction.addEnvironment(
             "TERMINATE_WORKFLOW_ARN",

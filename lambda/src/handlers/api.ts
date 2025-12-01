@@ -1,9 +1,17 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, UpdateCommand } from "@aws-sdk/lib-dynamodb";
-import { SFNClient, StartExecutionCommand, StartExecutionCommandOutput } from "@aws-sdk/client-sfn";
+import { DynamoDBDocumentClient, UpdateCommand, PutCommand } from "@aws-sdk/lib-dynamodb";
+import {
+    SFNClient,
+    StartExecutionCommand,
+    StartExecutionCommandOutput,
+    DescribeExecutionCommand,
+    GetExecutionHistoryCommand,
+    HistoryEvent,
+} from "@aws-sdk/client-sfn";
 import { SFNClientConfig } from "@aws-sdk/client-sfn";
 import { DynamoDBClientConfig } from "@aws-sdk/client-dynamodb";
+import DynamoDBWrapper from "../utils/dynamoDbWrapper";
 
 // Configure clients to use local endpoints when available (for local testing)
 const sfnClientConfig: Partial<SFNClientConfig> = {};
@@ -123,6 +131,30 @@ const handleDeployInstance = async (
 
         if (!executionResponse.executionArn) {
             throw new Error("Failed to start UserDeployEC2 Step Function");
+        }
+
+        // Store execution ARN in DynamoDB immediately so we can track the deployment status
+        // Use a placeholder instanceId based on the execution name until the real instance is created
+        const placeholderInstanceId = `pending-${executionName}`;
+        const now = new Date().toISOString();
+
+        try {
+            const putCommand = new PutCommand({
+                TableName: RUNNING_INSTANCES_TABLE,
+                Item: {
+                    instanceId: placeholderInstanceId,
+                    userId: userId,
+                    executionArn: executionResponse.executionArn,
+                    status: "deploying",
+                    creationTime: now, // Match GSI sort key name
+                    lastModifiedTime: now,
+                },
+            });
+            await docClient.send(putCommand);
+            console.log(`Stored execution tracking record for user ${userId}`);
+        } catch (dbError) {
+            console.error("Failed to store execution ARN in DynamoDB:", dbError);
+            // Don't fail the request - the Step Function has already started
         }
 
         console.log(
@@ -363,6 +395,280 @@ const handleStreamingLink = async (event: APIGatewayProxyEvent): Promise<APIGate
     }
 };
 
+// ============================================================================
+// Deployment Status Handler
+// ============================================================================
+
+// Define workflow steps for deploy and terminate workflows
+const DEPLOY_STEPS = [
+    { name: "CheckRunningStreams", displayName: "Checking existing streams", order: 1 },
+    { name: "CheckIfValidStream", displayName: "Validating stream status", order: 2 },
+    { name: "DeployEC2", displayName: "Deploying EC2 instance", order: 3 },
+    { name: "WaitForInstanceReady", displayName: "Waiting for instance to be ready", order: 4 },
+    { name: "ConfigureDcvInstance", displayName: "Configuring DCV session", order: 5 },
+    { name: "UpdateRunningStreams", displayName: "Updating streaming database", order: 6 },
+    { name: "DeploymentSuccess", displayName: "Deployment complete", order: 7 },
+];
+
+const TERMINATE_STEPS = [
+    { name: "CheckRunningStreams", displayName: "Checking running streams", order: 1 },
+    { name: "TerminateEC2", displayName: "Terminating EC2 instance", order: 2 },
+    { name: "UpdateRunningStreams", displayName: "Updating streaming database", order: 3 },
+    { name: "TerminationSuccess", displayName: "Termination complete", order: 4 },
+];
+
+interface StepInfo {
+    currentStep: string;
+    currentStepName: string;
+    stepNumber: number;
+    totalSteps: number;
+    completedSteps: string[];
+    progress: number;
+}
+
+// Extract current step from execution history
+const getStepInfoFromHistory = (events: HistoryEvent[], isTerminate: boolean): StepInfo | null => {
+    const steps = isTerminate ? TERMINATE_STEPS : DEPLOY_STEPS;
+    const totalSteps = steps.length;
+    const completedSteps: string[] = [];
+    let currentStep = steps[0].name;
+    let currentStepName = steps[0].displayName;
+    let stepNumber = 1;
+
+    for (const event of events) {
+        if (event.type === "TaskStateEntered" || event.type === "WaitStateEntered") {
+            const details = event.stateEnteredEventDetails;
+            if (details?.name) {
+                currentStep = details.name;
+                const stepInfo = steps.find((s) => s.name === details.name);
+                if (stepInfo) {
+                    currentStepName = stepInfo.displayName;
+                    stepNumber = stepInfo.order;
+                }
+            }
+        } else if (event.type === "TaskStateExited" || event.type === "WaitStateExited") {
+            const details = event.stateExitedEventDetails;
+            if (details?.name && !completedSteps.includes(details.name)) {
+                completedSteps.push(details.name);
+            }
+        } else if (event.type === "ExecutionSucceeded") {
+            const lastStep = steps[steps.length - 1];
+            return {
+                currentStep: lastStep.name,
+                currentStepName: lastStep.displayName,
+                stepNumber: totalSteps,
+                totalSteps,
+                completedSteps: steps.map((s) => s.name),
+                progress: 100,
+            };
+        }
+    }
+
+    const progress = Math.round((completedSteps.length / totalSteps) * 100);
+
+    return {
+        currentStep,
+        currentStepName,
+        stepNumber,
+        totalSteps,
+        completedSteps,
+        progress,
+    };
+};
+
+// Extract error details from execution history
+const getErrorDetails = (
+    events: HistoryEvent[],
+): { errorStep: string; errorType: string; errorMessage: string } | null => {
+    for (let i = events.length - 1; i >= 0; i--) {
+        const event = events[i];
+
+        if (event.type === "TaskFailed" || event.type === "LambdaFunctionFailed") {
+            const details = event.lambdaFunctionFailedEventDetails || event.taskFailedEventDetails;
+            return {
+                errorStep: "Unknown",
+                errorType: (details as any)?.error || "TaskFailed",
+                errorMessage: (details as any)?.cause || "Task execution failed",
+            };
+        }
+
+        if (event.type === "ExecutionFailed") {
+            const details = event.executionFailedEventDetails;
+            return {
+                errorStep: "Execution",
+                errorType: details?.error || "ExecutionFailed",
+                errorMessage: details?.cause || "Execution failed",
+            };
+        }
+
+        if (event.type === "TaskStateEntered") {
+            const stateDetails = event.stateEnteredEventDetails;
+            for (let j = i + 1; j < events.length && j < i + 5; j++) {
+                const nextEvent = events[j];
+                if (nextEvent.type === "TaskFailed" || nextEvent.type === "LambdaFunctionFailed") {
+                    const failDetails =
+                        nextEvent.lambdaFunctionFailedEventDetails ||
+                        nextEvent.taskFailedEventDetails;
+                    return {
+                        errorStep: stateDetails?.name || "Unknown",
+                        errorType: (failDetails as any)?.error || "TaskFailed",
+                        errorMessage: (failDetails as any)?.cause || "Task execution failed",
+                    };
+                }
+            }
+        }
+    }
+
+    return null;
+};
+
+// Deployment Status Handler
+const handleDeploymentStatus = async (
+    event: APIGatewayProxyEvent,
+): Promise<APIGatewayProxyResult> => {
+    try {
+        const userId = event.queryStringParameters?.userId;
+
+        if (!userId) {
+            return createResponse(400, {
+                error: "BadRequest",
+                message: "userId query parameter is required",
+            });
+        }
+
+        const dbWrapper = new DynamoDBWrapper(RUNNING_INSTANCES_TABLE);
+        const instances = await dbWrapper.queryByUserId(userId);
+
+        if (!instances || instances.length === 0) {
+            return createResponse(404, {
+                error: "NotFound",
+                message: `No running instance found for userId: ${userId}`,
+                status: "NOT_FOUND",
+            });
+        }
+
+        const runningInstance = instances[0];
+
+        if (!runningInstance.executionArn) {
+            return createResponse(404, {
+                error: "NotFound",
+                message: `No active deployment found for userId: ${userId}`,
+                status: "NOT_FOUND",
+            });
+        }
+
+        const execCommand = new DescribeExecutionCommand({
+            executionArn: runningInstance.executionArn,
+        });
+
+        const exec = await sfnClient.send(execCommand);
+        const executionArn = exec.executionArn || "";
+        const isTerminate = executionArn.includes("Terminate");
+        const status = exec.status || "UNKNOWN";
+
+        // Get execution history for detailed step info
+        let stepInfo: StepInfo | null = null;
+        let errorDetails: { errorStep: string; errorType: string; errorMessage: string } | null =
+            null;
+
+        try {
+            const historyCommand = new GetExecutionHistoryCommand({
+                executionArn: exec.executionArn,
+                maxResults: 100,
+                reverseOrder: false,
+            });
+            const historyResult = await sfnClient.send(historyCommand);
+            const events = historyResult.events || [];
+
+            stepInfo = getStepInfoFromHistory(events, isTerminate);
+
+            if (status === "FAILED" || status === "TIMED_OUT" || status === "ABORTED") {
+                errorDetails = getErrorDetails(events);
+            }
+        } catch (historyError) {
+            console.warn("Failed to get execution history:", historyError);
+        }
+
+        // Build response based on status
+        switch (status) {
+            case "RUNNING":
+                return createResponse(200, {
+                    status: "RUNNING",
+                    message: stepInfo?.currentStepName || "Deployment in progress...",
+                    deploymentStatus: "deploying",
+                    currentStep: stepInfo?.currentStep,
+                    currentStepName: stepInfo?.currentStepName,
+                    stepNumber: stepInfo?.stepNumber,
+                    totalSteps: stepInfo?.totalSteps,
+                    progress: stepInfo?.progress,
+                    completedSteps: stepInfo?.completedSteps,
+                    startedAt: exec.startDate?.toISOString(),
+                });
+
+            case "SUCCEEDED":
+                const output = exec.output ? JSON.parse(exec.output) : {};
+                return createResponse(200, {
+                    status: "SUCCEEDED",
+                    message: "Instance is ready for streaming",
+                    deploymentStatus: "running",
+                    instanceId: output.instanceId || runningInstance.instanceId,
+                    dcvUrl: output.dcvUrl,
+                    progress: 100,
+                    totalSteps: stepInfo?.totalSteps,
+                    completedSteps: stepInfo?.completedSteps,
+                    startedAt: exec.startDate?.toISOString(),
+                    completedAt: exec.stopDate?.toISOString(),
+                });
+
+            case "FAILED":
+            case "TIMED_OUT":
+            case "ABORTED":
+                const errorOutput = exec.output ? JSON.parse(exec.output) : {};
+                return createResponse(200, {
+                    status: "FAILED",
+                    message:
+                        errorDetails?.errorMessage ||
+                        errorOutput.message ||
+                        exec.cause ||
+                        "Deployment failed",
+                    error:
+                        errorDetails?.errorType ||
+                        errorOutput.error ||
+                        exec.error ||
+                        "DeploymentFailed",
+                    errorStep: errorDetails?.errorStep,
+                    failedAt: stepInfo?.currentStepName,
+                    progress: stepInfo?.progress,
+                    stepNumber: stepInfo?.stepNumber,
+                    totalSteps: stepInfo?.totalSteps,
+                    completedSteps: stepInfo?.completedSteps,
+                    startedAt: exec.startDate?.toISOString(),
+                    failedAtTime: exec.stopDate?.toISOString(),
+                });
+
+            default:
+                return createResponse(200, {
+                    status: "UNKNOWN",
+                    message: `Unknown execution status: ${status}`,
+                });
+        }
+    } catch (error: unknown) {
+        console.error("Error in handleDeploymentStatus:", error);
+        if (error instanceof Error) {
+            return createResponse(500, {
+                error: error.name,
+                message: error.message,
+                status: "FAILED",
+            });
+        }
+        return createResponse(500, {
+            error: "UnknownError",
+            message: "An unknown error occurred",
+            status: "FAILED",
+        });
+    }
+};
+
 // Main handler that routes to the appropriate function
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     console.log("Event:", JSON.stringify(event, null, 2));
@@ -378,6 +684,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
             return await handleTerminateInstance(event);
         } else if (path === "/streamingLink" && method === "GET") {
             return await handleStreamingLink(event);
+        } else if (path === "/deployment-status" && method === "GET") {
+            return await handleDeploymentStatus(event);
         } else {
             return createResponse(404, {
                 error: "Not Found",

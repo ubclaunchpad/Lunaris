@@ -42,6 +42,20 @@ export interface GetDeploymentStatusResponse {
     instanceId?: string;
     dcvUrl?: string;
     error?: string;
+    // Enhanced step information
+    currentStep?: string;
+    currentStepName?: string;
+    stepNumber?: number;
+    totalSteps?: number;
+    progress?: number; // 0-100 percentage
+    completedSteps?: string[];
+    // Timing information
+    startedAt?: string;
+    completedAt?: string;
+    // Error details (when status is FAILED)
+    errorStep?: string;
+    failedAt?: string;
+    failedAtTime?: string;
 }
 
 export class ApiError extends Error {

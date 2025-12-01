@@ -53,6 +53,7 @@ export class ApiGateway extends Construct {
         this.createDeployInstanceEndpoint(integration);
         this.createTerminateInstanceEndpoint(integration);
         this.createStreamingLinkEndpoint(integration);
+        this.createDeploymentStatusEndpoint(integration);
     }
 
     private createDeployInstanceEndpoint(integration: LambdaIntegration): void {
@@ -153,6 +154,72 @@ export class ApiGateway extends Construct {
 
     private createStreamingLinkEndpoint(integration: LambdaIntegration): void {
         const resource = this.restApi.root.addResource("streamingLink");
+
+        const methodOptions = this.authorizer
+            ? {
+                  authorizer: this.authorizer,
+                  authorizationType: AuthorizationType.COGNITO,
+                  requestParameters: {
+                      "method.request.querystring.userId": false, // Optional since we get it from token
+                  },
+                  methodResponses: [
+                      {
+                          statusCode: "200",
+                          responseModels: {
+                              "application/json": { modelId: "Empty" },
+                          },
+                      },
+                      {
+                          statusCode: "400",
+                          responseModels: {
+                              "application/json": { modelId: "Error" },
+                          },
+                      },
+                      {
+                          statusCode: "401",
+                          responseModels: {
+                              "application/json": { modelId: "Error" },
+                          },
+                      },
+                      {
+                          statusCode: "404",
+                          responseModels: {
+                              "application/json": { modelId: "Error" },
+                          },
+                      },
+                  ],
+              }
+            : {
+                  requestParameters: {
+                      "method.request.querystring.userId": true,
+                  },
+                  methodResponses: [
+                      {
+                          statusCode: "200",
+                          responseModels: {
+                              "application/json": { modelId: "Empty" },
+                          },
+                      },
+                      {
+                          statusCode: "400",
+                          responseModels: {
+                              "application/json": { modelId: "Error" },
+                          },
+                      },
+                      {
+                          statusCode: "404",
+                          responseModels: {
+                              "application/json": { modelId: "Error" },
+                          },
+                      },
+                  ],
+              };
+
+        resource.addMethod("GET", integration, methodOptions);
+    }
+
+    private createDeploymentStatusEndpoint(integration: LambdaIntegration): void {
+        const resource = this.restApi.root.addResource("deployment-status");
 
         const methodOptions = this.authorizer
             ? {
