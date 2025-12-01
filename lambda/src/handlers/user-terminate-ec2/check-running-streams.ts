@@ -10,18 +10,29 @@ export const handler = async (
     const db = new DynamoDBWrapper(process.env.RUNNING_STREAMS_TABLE_NAME);
     const userId = event.userId;
 
-    const item = await db.getItem({ userId });
+    // Query by userId using the GSI (userId is not the primary key, instanceArn is)
+    const items = await db.query({
+        IndexName: "UserIdIndex",
+        KeyConditionExpression: "userId = :userId",
+        ExpressionAttributeValues: {
+            ":userId": userId,
+        },
+        ScanIndexForward: false, // Get most recent first
+    });
 
-    if (!item) {
+    if (!items || items.length === 0) {
         return {
             valid: false,
             message: "No active streaming session found for user",
         };
     }
 
+    const item = items[0];
+
     return {
         valid: true,
         sessionId: item.sessionId || userId,
+        instanceId: item.instanceId,
         instanceArn: item.instanceArn,
     };
 };
@@ -34,5 +45,6 @@ type CheckRunningStreamsResult = {
     valid: boolean;
     message?: string;
     sessionId?: string;
+    instanceId?: string;
     instanceArn?: string;
 };

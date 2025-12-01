@@ -72,7 +72,8 @@ class EC2Wrapper {
     private region: string;
 
     constructor(region?: string) {
-        this.region = region || process.env.CDK_DEFAULT_REGION || "us-east-1";
+        // Use AWS_REGION (set by Lambda runtime) or LAMBDA_REGION (set by CDK) or fallback to us-west-2
+        this.region = region || process.env.AWS_REGION || process.env.LAMBDA_REGION || "us-west-2";
         this.client = new EC2Client({ region: this.region });
     }
 

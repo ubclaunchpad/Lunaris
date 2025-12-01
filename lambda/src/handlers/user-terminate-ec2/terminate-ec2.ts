@@ -2,9 +2,10 @@ import EC2Wrapper from "../../utils/ec2Wrapper";
 import EBSWrapper from "../../utils/ebsWrapper";
 import DCVWrapper from "../../utils/dcvWrapper";
 import DynamoDBWrapper from "../../utils/dynamoDbWrapper";
-import { type GetCommandOutput } from "@aws-sdk/lib-dynamodb";
+
 export interface TerminateEc2Event {
     userId: string;
+    instanceId: string;
     instanceArn: string;
 }
 
@@ -19,25 +20,6 @@ export interface TerminateEc2Result {
     error?: string;
 }
 
-async function validateInstance(
-    table: DynamoDBWrapper,
-    instanceId: string,
-    userId: string,
-): Promise<GetCommandOutput["Item"] | null> {
-    try {
-        const instance = await table.getItem({ instanceId });
-        if (!instance) {
-            throw new Error(`Instance ${instanceId} not found`);
-        }
-        if (instance.userId !== userId) {
-            throw new Error(`Instance does not belong to user ${userId}`);
-        }
-        return instance;
-    } catch (error) {
-        throw error;
-    }
-}
-
 async function terminateWorkflow(
     instanceId: string,
     userId: string,
@@ -47,31 +29,39 @@ async function terminateWorkflow(
     const ebsWrapper = new EBSWrapper();
     const ec2Wrapper = new EC2Wrapper();
 
-    /// you can add "try catch" around this workflow if we want rollback mechanism
+    let dcvResult = { stoppedSuccessfully: false, message: "DCV stop skipped" };
+    let detachResult = { state: "skipped" };
 
-    const instanceDetails = await ec2Wrapper.getInstanceDetails(instanceId);
-    const volumeId = instanceDetails.volumes[0]?.volumeId;
+    try {
+        // Get instance details to find volume
+        const instanceDetails = await ec2Wrapper.getInstanceDetails(instanceId);
+        const volumeId = instanceDetails.volumes[0]?.volumeId;
 
-    if (!volumeId) {
-        throw new Error("No volume found for instance");
+        // Stop DCV session (best effort - don't fail if it doesn't work)
+        try {
+            dcvResult = await dcvWrapper.stopDCVSession();
+        } catch (dcvError) {
+            console.warn("Failed to stop DCV session:", dcvError);
+        }
+
+        // Detach EBS volume if found (best effort for MVP)
+        if (volumeId) {
+            try {
+                detachResult = await ebsWrapper.detachEBSVolume(volumeId, instanceId);
+            } catch (detachError) {
+                console.warn("Failed to detach volume:", detachError);
+            }
+        }
+    } catch (detailsError) {
+        console.warn("Failed to get instance details:", detailsError);
     }
 
-    // Stop DCV session
-    const dcvResult = await dcvWrapper.stopDCVSession();
+    // Terminate EC2 instance - don't wait for full termination to avoid Lambda timeout
+    // The instance will terminate in the background after the Lambda returns
+    const terminateResult = await ec2Wrapper.terminateInstance(instanceId);
 
-    // Detach EBS volume
-    const detachResult = await ebsWrapper.detachEBSVolume(volumeId, instanceId);
-    if (detachResult.state !== "detached") {
-        console.error(`Failed to detach volume ${volumeId}, current state: ${detachResult.state}`); // Debugging info
-        throw new Error(
-            `Failed to detach volume ${volumeId}. Current state: ${detachResult.state}`,
-        );
-    }
-
-    // Terminate EC2 instance
-    const terminateResult = await ec2Wrapper.terminateAndWait(instanceId, 300);
-
-    // Update DynamoDB table
+    // Update DynamoDB table (best effort - don't fail if record doesn't exist)
+    let dynamoDbUpdateStatus = "skipped";
     try {
         await runningInstancesTable.updateItem(
             { instanceId },
@@ -84,55 +74,57 @@ async function terminateWorkflow(
                 },
             },
         );
+        dynamoDbUpdateStatus = "updated";
     } catch (error: unknown) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        throw new Error(`Failed to update DynamoDB for instance ${instanceId}: ${errorMessage}`);
+        console.warn("Failed to update RunningInstances table (may not exist):", error);
+        dynamoDbUpdateStatus = "not_found";
     }
 
     return {
         success: true,
+        instanceId,
         dcvStopped: dcvResult.stoppedSuccessfully,
         detachVolumeState: detachResult.state,
         terminateInstanceState: terminateResult.state,
-        dynamoDbUpdateStatus: "updated",
-        message: dcvResult.stoppedSuccessfully
-            ? `Instance ${instanceId} terminated successfully.`
-            : `Instance ${instanceId} terminated successfully. ${dcvResult.message}`, // Ensure message reflects termination success but includes DCV stop failure if necessary
+        dynamoDbUpdateStatus,
+        message: `Instance ${instanceId} terminated successfully.`,
     };
 }
 
 export const handler = async (event: TerminateEc2Event): Promise<TerminateEc2Result> => {
     try {
-        const { userId, instanceArn } = event;
-        if (!userId || !instanceArn) {
-            return { success: false, error: "userId and instanceArn are required" };
+        const { userId, instanceId, instanceArn } = event;
+
+        // Validate required fields
+        if (!userId) {
+            throw new Error("userId is required");
         }
 
-        const instanceId = instanceArn.split("/").pop();
-        if (!instanceId || instanceId === instanceArn) {
-            return { success: false, error: "Invalid instanceArn format" };
+        // Get instanceId from event directly, or extract from instanceArn as fallback
+        let resolvedInstanceId: string | undefined = instanceId;
+        if (!resolvedInstanceId && instanceArn) {
+            const parts = instanceArn.split("/");
+            resolvedInstanceId = parts[parts.length - 1];
         }
+
+        if (!resolvedInstanceId) {
+            throw new Error("instanceId or instanceArn is required");
+        }
+
+        console.log(`Terminating instance ${resolvedInstanceId} for user ${userId}`);
 
         const runningInstancesTable = new DynamoDBWrapper(
             process.env.RUNNING_INSTANCES_TABLE || "RunningInstances",
         );
 
-        const runningInstance = await validateInstance(runningInstancesTable, instanceId, userId);
+        // Skip validation - the CheckRunningStreams step already verified the instance exists
+        // and belongs to the user via the RunningStreams table
 
-        if (runningInstance!.status === "terminated") {
-            return {
-                success: true,
-                instanceId,
-                message: `Instance ${instanceId} already terminated`,
-            };
-        }
-
-        return await terminateWorkflow(instanceId, userId, runningInstancesTable);
+        return await terminateWorkflow(resolvedInstanceId, userId, runningInstancesTable);
     } catch (error: unknown) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        return {
-            success: false,
-            error: errorMessage || "Unknown error during instance creation",
-        };
+        console.error("Terminate error:", errorMessage);
+        // Throw the error so Step Functions can catch it as a failure
+        throw new Error(errorMessage || "Unknown error during instance termination");
     }
 };

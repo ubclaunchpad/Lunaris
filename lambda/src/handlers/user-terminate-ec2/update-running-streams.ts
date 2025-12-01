@@ -8,33 +8,16 @@ export const handler = async (
     }
 
     const db = new DynamoDBWrapper(process.env.RUNNING_STREAMS_TABLE_NAME);
-    const payload = {
-        ...event,
-        updatedAt: new Date().toISOString(),
-    };
 
-    const updateConfig = {
-        UpdateExpression: `
-      SET
-        running = :running,
-        updatedAt = :updatedAt
-    `,
-        ExpressionAttributeValues: {
-            ":running": false,
-            ":updatedAt": payload.updatedAt,
-        },
-    };
-
-    await db.updateItem({ userId: event.userId }, updateConfig);
+    // Delete the running stream record (instanceArn is the primary key)
+    await db.deleteItem({ instanceArn: event.instanceArn });
 
     return { success: true };
 };
 
 type UpdateRunningStreamsEvent = {
     userId: string;
-    sessionId: string;
     instanceArn: string;
-    running: boolean;
 };
 
 type UpdateRunningStreamsResult = {

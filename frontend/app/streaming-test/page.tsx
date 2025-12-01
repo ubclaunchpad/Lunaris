@@ -16,6 +16,7 @@ interface StreamingSession {
     dcvIp: string;
     dcvPort: number;
     sessionId?: string;
+    instanceId?: string;
 }
 
 /**
@@ -39,8 +40,10 @@ export default function StreamingTestPage() {
     const [logs, setLogs] = useState<string[]>([]);
     const [loading, setLoading] = useState(false);
     const [deploying, setDeploying] = useState(false);
+    const [terminating, setTerminating] = useState(false);
     const [hasCredentials, setHasCredentials] = useState(false);
     const [deploymentComplete, setDeploymentComplete] = useState(false);
+    const [currentInstanceId, setCurrentInstanceId] = useState<string | null>(null);
 
     const addLog = useCallback((msg: string) => {
         const timestamp = new Date().toLocaleTimeString();
@@ -49,6 +52,7 @@ export default function StreamingTestPage() {
 
     // Track previous step to avoid duplicate logs
     const [lastLoggedStep, setLastLoggedStep] = useState<string | null>(null);
+    const [lastLoggedTerminateStep, setLastLoggedTerminateStep] = useState<string | null>(null);
 
     // Handle deployment status changes
     const handleStatusChange = useCallback(
@@ -92,6 +96,7 @@ export default function StreamingTestPage() {
             addLog(`✅ Deployment complete! Instance is ready.`);
             if (response.instanceId) {
                 addLog(`   Instance ID: ${response.instanceId}`);
+                setCurrentInstanceId(response.instanceId);
             }
             if (response.dcvUrl) {
                 addLog(`   DCV URL: ${response.dcvUrl}`);
@@ -121,6 +126,72 @@ export default function StreamingTestPage() {
         [addLog],
     );
 
+    // Handle termination status changes
+    const handleTerminateStatusChange = useCallback(
+        (status: DeploymentStatus, response: GetDeploymentStatusResponse) => {
+            if (status === "RUNNING") {
+                const stepKey = `terminate-${response.currentStep}-${response.stepNumber}`;
+                if (stepKey !== lastLoggedTerminateStep) {
+                    const progressInfo =
+                        response.progress !== undefined ? ` (${response.progress}% complete)` : "";
+                    const stepInfo =
+                        response.stepNumber && response.totalSteps
+                            ? ` [Step ${response.stepNumber}/${response.totalSteps}]`
+                            : "";
+                    addLog(
+                        `🛑${stepInfo} ${response.currentStepName || response.message}${progressInfo}`,
+                    );
+                    setLastLoggedTerminateStep(stepKey);
+                }
+            } else if (status === "NOT_FOUND") {
+                // After termination succeeds, deployment-status returns NOT_FOUND
+                // This is expected - means instance is fully terminated
+            } else if (status === "FAILED") {
+                const errorInfo = response.errorStep
+                    ? ` at step "${response.failedAt || response.errorStep}"`
+                    : "";
+                addLog(`❌ Termination failed${errorInfo}: ${response.message}`);
+                if (response.error) {
+                    addLog(`   Error type: ${response.error}`);
+                }
+            }
+        },
+        [addLog, lastLoggedTerminateStep],
+    );
+
+    // Handle termination success
+    const handleTerminateSuccess = useCallback(
+        (response: GetDeploymentStatusResponse) => {
+            addLog(`✅ Termination complete! Instance has been shut down.`);
+            if (response.startedAt && response.completedAt) {
+                const duration = Math.round(
+                    (new Date(response.completedAt).getTime() -
+                        new Date(response.startedAt).getTime()) /
+                        1000,
+                );
+                addLog(`   Duration: ${duration}s`);
+            }
+            // Clear all state
+            setServerUrl("");
+            setUsername("");
+            setPassword("");
+            setHasCredentials(false);
+            setCurrentInstanceId(null);
+            setDeploymentComplete(false);
+            setTerminating(false);
+        },
+        [addLog],
+    );
+
+    // Handle termination error
+    const handleTerminateError = useCallback(
+        (error: Error) => {
+            addLog(`❌ Termination failed: ${error.message}`);
+            setTerminating(false);
+        },
+        [addLog],
+    );
+
     // Set up deployment status polling
     const {
         status: deploymentStatus,
@@ -137,12 +208,84 @@ export default function StreamingTestPage() {
         onError: handleDeploymentError,
     });
 
+    // Set up termination status polling
+    const {
+        status: terminateStatus,
+        isPolling: isTerminatePolling,
+        startPolling: startTerminatePolling,
+        stopPolling: stopTerminatePolling,
+    } = useDeploymentStatus({
+        userId,
+        pollInterval: 3000, // Poll every 3 seconds for termination (faster)
+        onStatusChange: handleTerminateStatusChange,
+        onSuccess: handleTerminateSuccess,
+        onError: handleTerminateError,
+    });
+
     // Stop polling when component unmounts or userId changes
     useEffect(() => {
         return () => {
             stopPolling();
+            stopTerminatePolling();
         };
-    }, [userId, stopPolling]);
+    }, [userId, stopPolling, stopTerminatePolling]);
+
+    // Check for existing deployment/instance on page load
+    useEffect(() => {
+        const checkExistingDeployment = async () => {
+            if (!userId) return;
+
+            try {
+                // First check deployment status
+                const statusResponse = await apiClient.getDeploymentStatus({ userId });
+                if (statusResponse.status === "SUCCEEDED" && statusResponse.instanceId) {
+                    addLog(`📋 Found existing deployment for user: ${userId}`);
+                    addLog(`   Instance ID: ${statusResponse.instanceId}`);
+                    setCurrentInstanceId(statusResponse.instanceId);
+                    setDeploymentComplete(true);
+                    if (statusResponse.dcvUrl) {
+                        setServerUrl(statusResponse.dcvUrl);
+                    }
+                    return; // Found active deployment, no need to check further
+                } else if (statusResponse.status === "RUNNING") {
+                    addLog(`⏳ Found in-progress deployment for user: ${userId}`);
+                    setDeploying(true);
+                    startPolling();
+                    return; // Deployment in progress
+                } else if (statusResponse.status === "FAILED") {
+                    addLog(`⚠️ Previous deployment failed: ${statusResponse.message}`);
+                    // Continue to check for existing streams
+                }
+            } catch {
+                // No deployment record found, continue to check streams
+            }
+
+            // Also check if there's an existing streaming session (from a previous deployment)
+            try {
+                const streamResponse = await apiClient.getStreamingLink({ userId });
+                const session = streamResponse as unknown as StreamingSession;
+                if (session.instanceId) {
+                    addLog(`📋 Found existing streaming session for user: ${userId}`);
+                    addLog(`   Instance ID: ${session.instanceId}`);
+                    setCurrentInstanceId(session.instanceId);
+                    setServerUrl(session.streamingLink);
+                    setUsername(session.dcvUser);
+                    if (session.dcvPassword) {
+                        setPassword(session.dcvPassword);
+                        setHasCredentials(true);
+                    }
+                    setDeploymentComplete(true);
+                }
+            } catch {
+                // No streaming session found either
+                addLog(
+                    `ℹ️ No active instance found for user: ${userId}. Click Deploy to start one.`,
+                );
+            }
+        };
+
+        checkExistingDeployment();
+    }, []); // Only run once on mount
 
     // Reset logged step when starting new deployment
     const deployInstance = async () => {
@@ -170,6 +313,39 @@ export default function StreamingTestPage() {
         }
     };
 
+    const terminateInstance = async () => {
+        if (!userId) {
+            addLog("❌ Please enter a User ID");
+            return;
+        }
+
+        if (!currentInstanceId) {
+            addLog("❌ No active instance to terminate. Deploy one first.");
+            return;
+        }
+
+        setTerminating(true);
+        setLastLoggedTerminateStep(null); // Reset step tracking
+        addLog(`🛑 Terminating instance ${currentInstanceId} for user: ${userId}...`);
+
+        try {
+            const response = await apiClient.terminateInstance({
+                userId,
+                instanceId: currentInstanceId,
+            });
+            addLog(`✅ Termination workflow started: ${response.message}`);
+            addLog(`🔄 Monitoring termination progress...`);
+
+            // Start polling for termination status
+            startTerminatePolling();
+        } catch (error) {
+            addLog(
+                `❌ Terminate error: ${error instanceof Error ? error.message : "Unknown error"}`,
+            );
+            setTerminating(false);
+        }
+    };
+
     const fetchCredentials = async () => {
         if (!userId) {
             addLog("❌ Please enter a User ID");
@@ -186,6 +362,10 @@ export default function StreamingTestPage() {
             addLog(`✅ Found streaming session!`);
             addLog(`   Server: ${session.streamingLink}`);
             addLog(`   User: ${session.dcvUser}`);
+            if (session.instanceId) {
+                addLog(`   Instance: ${session.instanceId}`);
+                setCurrentInstanceId(session.instanceId);
+            }
 
             // Auto-fill the form with credentials
             setServerUrl(session.streamingLink);
@@ -305,6 +485,19 @@ export default function StreamingTestPage() {
                         >
                             {loading ? "..." : "🔗 Get Session"}
                         </button>
+                        <button
+                            onClick={terminateInstance}
+                            disabled={
+                                terminating || isTerminatePolling || !userId || !currentInstanceId
+                            }
+                            className="flex-1 py-2 bg-red-600 rounded font-medium hover:bg-red-700 transition-colors disabled:opacity-50"
+                        >
+                            {isTerminatePolling
+                                ? "🔄 Terminating..."
+                                : terminating
+                                  ? "Starting..."
+                                  : "🛑 Terminate"}
+                        </button>
                     </div>
 
                     {/* Deployment Status Indicator */}
@@ -348,13 +541,33 @@ export default function StreamingTestPage() {
                     )}
 
                     {/* Deployment Complete Indicator */}
-                    {deploymentComplete && !isPolling && (
+                    {deploymentComplete && !isPolling && !isTerminatePolling && (
                         <div className="bg-green-900/50 border border-green-700 rounded-lg p-3">
                             <div className="flex items-center gap-2">
                                 <span className="text-green-400">✓</span>
                                 <span className="text-green-300 text-sm">
                                     Instance deployed! Click "Get Session" to connect.
                                 </span>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Termination Status Indicator */}
+                    {isTerminatePolling && (
+                        <div className="bg-red-900/50 border border-red-700 rounded-lg p-3 space-y-2">
+                            <div className="flex items-center gap-2">
+                                <div className="animate-spin h-4 w-4 border-2 border-red-400 border-t-transparent rounded-full"></div>
+                                <span className="text-red-300 text-sm flex-1">
+                                    {terminateStatus === "RUNNING"
+                                        ? "Terminating instance..."
+                                        : "Checking termination status..."}
+                                </span>
+                                <button
+                                    onClick={stopTerminatePolling}
+                                    className="text-xs text-red-400 hover:text-red-300"
+                                >
+                                    Cancel
+                                </button>
                             </div>
                         </div>
                     )}

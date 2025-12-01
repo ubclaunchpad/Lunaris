@@ -201,6 +201,7 @@ export class LambdaFunctions extends Construct {
     private createTerminateEC2Function(props: LambdaFunctionsProps): Function {
         return new Function(this, "TerminateEC2Handler", {
             ...this.getBaseLambdaConfig(),
+            timeout: Duration.seconds(60), // Increased timeout for EC2 termination
             handler: "handlers/user-terminate-ec2/terminate-ec2.handler",
             description: "Terminates EC2 instance as part of user termination workflow",
             environment: {
