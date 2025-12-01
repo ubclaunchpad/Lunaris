@@ -5,6 +5,7 @@ import {
     AttributeType,
     BillingMode,
     ProjectionType,
+    TableEncryption,
 } from "aws-cdk-lib/aws-dynamodb";
 import { RemovalPolicy } from "aws-cdk-lib";
 
@@ -24,13 +25,19 @@ export class DynamoDbTables extends Construct {
      * - userId (string)
      * - streamingId (string)
      * - streamingLink (string)
+     * - dcvUser (string) - DCV username
+     * - dcvPassword (string) - Unique password per instance (encrypted at rest)
      * - createdAt (ISO 8601 formatted date string)
      * - updatedAt (ISO 8601 formatted date string)
+     *
+     * Security: Passwords are generated per-instance and stored encrypted.
+     * The table uses AWS-managed encryption (KMS) at rest.
      */
     setUpRunningStreamsTable(): ITable {
         const table = new Table(this, "RunningStreams", {
             partitionKey: { name: "instanceArn", type: AttributeType.STRING },
             billingMode: BillingMode.PAY_PER_REQUEST,
+            encryption: TableEncryption.AWS_MANAGED, // Encrypt at rest with AWS-managed keys
             removalPolicy: RemovalPolicy.DESTROY, // Use RETAIN for production
         });
 

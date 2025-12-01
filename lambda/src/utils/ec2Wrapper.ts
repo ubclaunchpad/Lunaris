@@ -25,6 +25,7 @@ export interface EC2InstanceConfig {
     subnetId?: string;
     iamInstanceProfile?: string;
     tags?: Record<string, string>;
+    userDataScript?: string;
 }
 
 export interface EC2InstanceResult {
@@ -83,6 +84,8 @@ class EC2Wrapper {
             keyName,
             securityGroupIds,
             subnetId,
+            iamInstanceProfile,
+            userDataScript,
             tags = {},
         } = config;
 
@@ -127,6 +130,13 @@ class EC2Wrapper {
         if (securityGroupIds && securityGroupIds.length > 0)
             input.SecurityGroupIds = securityGroupIds;
         if (subnetId) input.SubnetId = subnetId;
+        if (iamInstanceProfile) {
+            input.IamInstanceProfile = { Name: iamInstanceProfile };
+        }
+        if (userDataScript) {
+            // User data must be base64 encoded
+            input.UserData = Buffer.from(userDataScript).toString("base64");
+        }
 
         return input;
     }
