@@ -3,9 +3,9 @@ import EBSWrapper from "../../utils/ebsWrapper";
 import DCVWrapper from "../../utils/dcvWrapper";
 import DynamoDBWrapper from "../../utils/dynamoDbWrapper";
 import { type GetCommandOutput } from "@aws-sdk/lib-dynamodb";
+
 export interface TerminateEc2Event {
     userId: string;
-    instanceArn: string;
 }
 
 export interface TerminateEc2Result {
@@ -19,23 +19,20 @@ export interface TerminateEc2Result {
     error?: string;
 }
 
-async function validateInstance(
+async function findUserInstance(
     table: DynamoDBWrapper,
-    instanceId: string,
     userId: string,
-): Promise<GetCommandOutput["Item"] | null> {
-    try {
-        const instance = await table.getItem({ instanceId });
-        if (!instance) {
-            throw new Error(`Instance ${instanceId} not found`);
-        }
-        if (instance.userId !== userId) {
-            throw new Error(`Instance does not belong to user ${userId}`);
-        }
-        return instance;
-    } catch (error) {
-        throw error;
+): Promise<GetCommandOutput["Item"]> {
+    const items = await table.queryByUserId(userId);
+
+    if (!items || items.length === 0) {
+        throw new Error(`No running instances found for user ${userId}`);
     }
+
+    // Pick the newest instance by creationTime
+    items.sort((a, b) => (b.creationTime || "").localeCompare(a.creationTime || ""));
+
+    return items[0]; 
 }
 
 async function terminateWorkflow(
@@ -103,23 +100,27 @@ async function terminateWorkflow(
 
 export const handler = async (event: TerminateEc2Event): Promise<TerminateEc2Result> => {
     try {
-        const { userId, instanceArn } = event;
-        if (!userId || !instanceArn) {
-            return { success: false, error: "userId and instanceArn are required" };
-        }
-
-        const instanceId = instanceArn.split("/").pop();
-        if (!instanceId || instanceId === instanceArn) {
-            return { success: false, error: "Invalid instanceArn format" };
+        const { userId } = event;
+        if (!userId) {
+            return { success: false, error: "userId is required" };
         }
 
         const runningInstancesTable = new DynamoDBWrapper(
             process.env.RUNNING_INSTANCES_TABLE || "RunningInstances",
         );
 
-        const runningInstance = await validateInstance(runningInstancesTable, instanceId, userId);
+        const runningInstance = await findUserInstance(runningInstancesTable, userId);
 
-        if (runningInstance!.status === "terminated") {
+         if (!runningInstance) {
+            throw new Error("No instance found for user");
+        }
+        if (runningInstance.userId !== userId) {
+            throw new Error(`Instance does not belong to user ${userId}`);
+        }       
+        
+        const instanceId = runningInstance.instanceId;
+
+        if (runningInstance.status === "terminated") {
             return {
                 success: true,
                 instanceId,

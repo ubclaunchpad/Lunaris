@@ -39,9 +39,7 @@
             "Parameters": {
                 "FunctionName": "${TerminateEC2Arn}",
                 "Payload": {
-                    "userId.$": "$.userId",
-                    "instanceId.$": "$.checkRunningStreamsResult.Payload.instanceId",
-                    "instanceArn.$": "$.checkRunningStreamsResult.Payload.instanceArn"
+                    "userId.$": "$.userId"
                 }
             },
             "ResultPath": "$.terminateResult",
