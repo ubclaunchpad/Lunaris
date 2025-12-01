@@ -19,6 +19,7 @@ export class LambdaFunctions extends Construct {
     // User Deploy EC2 Workflow Lambda Functions
     public readonly checkRunningStreamsFunction: Function;
     public readonly deployEC2Function: Function;
+    public readonly configureDcvInstanceFunction: Function;
     public readonly updateRunningStreamsFunction: Function;
 
     // User Terminate EC2 Workflow Lambda Functions
@@ -35,6 +36,7 @@ export class LambdaFunctions extends Construct {
         // Create User Deploy EC2 Workflow Lambda functions
         this.checkRunningStreamsFunction = this.createCheckRunningStreamsFunction(props);
         this.deployEC2Function = this.createDeployEC2Function(props);
+        this.configureDcvInstanceFunction = this.createConfigureDcvInstanceFunction(props);
         this.updateRunningStreamsFunction = this.createUpdateRunningStreamsFunction(props);
 
         // Create User Terminate EC2 Workflow Lambda functions
@@ -136,6 +138,39 @@ export class LambdaFunctions extends Construct {
         );
 
         return deployEC2Function;
+    }
+
+    // Creates the Lambda function for configuring DCV instances via SSM
+    private createConfigureDcvInstanceFunction(props: LambdaFunctionsProps): Function {
+        const configureDcvInstanceFunction = new Function(this, "ConfigureDcvInstanceHandler", {
+            ...this.getBaseLambdaConfig(),
+            handler: "handlers/user-deploy-ec2/configure-dcv-instance.handler",
+            description: "Configures DCV instance with SSL certificate and settings via SSM",
+            timeout: Duration.minutes(5), // SSL setup can take a few minutes
+            environment: {
+                RUNNING_INSTANCES_TABLE: props.runningInstancesTable.tableName,
+            },
+        });
+
+        // Add SSM permissions for sending commands to instances
+        configureDcvInstanceFunction.addToRolePolicy(
+            new PolicyStatement({
+                effect: Effect.ALLOW,
+                actions: ["ssm:SendCommand", "ssm:GetCommandInvocation"],
+                resources: ["*"],
+            }),
+        );
+
+        // Add EC2 describe permission to get instance details
+        configureDcvInstanceFunction.addToRolePolicy(
+            new PolicyStatement({
+                effect: Effect.ALLOW,
+                actions: ["ec2:DescribeInstances"],
+                resources: ["*"],
+            }),
+        );
+
+        return configureDcvInstanceFunction;
     }
 
     // Creates the Lambda function for updating running streams

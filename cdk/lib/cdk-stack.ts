@@ -77,6 +77,7 @@ export class CdkStack extends Stack {
         const stepFunctions = new StepFunctions(this, "StepFunctions", {
             checkRunningStreamsFunction: lambdaFunctions.checkRunningStreamsFunction,
             deployEC2Function: lambdaFunctions.deployEC2Function,
+            configureDcvInstanceFunction: lambdaFunctions.configureDcvInstanceFunction,
             updateRunningStreamsFunction: lambdaFunctions.updateRunningStreamsFunction,
             checkRunningStreamsTerminateFunction:
                 lambdaFunctions.checkRunningStreamsTerminateFunction,

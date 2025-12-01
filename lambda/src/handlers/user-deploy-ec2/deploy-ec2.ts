@@ -83,6 +83,52 @@ try {
 }
 
 # ============================================
+# Disable IE Enhanced Security Configuration
+# ============================================
+try {
+    "$(Get-Date) - Disabling IE Enhanced Security..." | Out-File -Append $LogFile
+    $AdminKey = "HKLM:\\SOFTWARE\\Microsoft\\Active Setup\\Installed Components\\{A509B1A7-37EF-4b3f-8CFC-4F3A74704073}"
+    $UserKey = "HKLM:\\SOFTWARE\\Microsoft\\Active Setup\\Installed Components\\{A509B1A8-37EF-4b3f-8CFC-4F3A74704073}"
+    Set-ItemProperty -Path $AdminKey -Name "IsInstalled" -Value 0 -Force -ErrorAction SilentlyContinue
+    Set-ItemProperty -Path $UserKey -Name "IsInstalled" -Value 0 -Force -ErrorAction SilentlyContinue
+    "$(Get-Date) - IE Enhanced Security disabled" | Out-File -Append $LogFile
+} catch {
+    "$(Get-Date) - Error disabling IE ESC: $_" | Out-File -Append $LogFile
+}
+
+# ============================================
+# Set Microsoft Edge as default browser
+# ============================================
+try {
+    "$(Get-Date) - Setting Edge as default browser..." | Out-File -Append $LogFile
+    
+    # Set Edge as default for HTTP/HTTPS
+    $RegPath = "HKCU:\\Software\\Microsoft\\Windows\\Shell\\Associations\\UrlAssociations"
+    New-Item -Path "$RegPath\\http\\UserChoice" -Force | Out-Null
+    New-Item -Path "$RegPath\\https\\UserChoice" -Force | Out-Null
+    
+    # Create default browser XML for DISM
+    $DefaultBrowserXml = @"
+<?xml version="1.0" encoding="UTF-8"?>
+<DefaultAssociations>
+  <Association Identifier=".htm" ProgId="MSEdgeHTM" ApplicationName="Microsoft Edge" />
+  <Association Identifier=".html" ProgId="MSEdgeHTM" ApplicationName="Microsoft Edge" />
+  <Association Identifier="http" ProgId="MSEdgeHTM" ApplicationName="Microsoft Edge" />
+  <Association Identifier="https" ProgId="MSEdgeHTM" ApplicationName="Microsoft Edge" />
+</DefaultAssociations>
+"@
+    $XmlPath = "C:\\ProgramData\\Lunaris\\DefaultBrowser.xml"
+    $DefaultBrowserXml | Out-File -FilePath $XmlPath -Encoding UTF8
+    
+    # Apply default associations
+    Dism.exe /Online /Import-DefaultAppAssociations:$XmlPath 2>&1 | Out-File -Append $LogFile
+    
+    "$(Get-Date) - Edge set as default browser" | Out-File -Append $LogFile
+} catch {
+    "$(Get-Date) - Error setting default browser: $_" | Out-File -Append $LogFile
+}
+
+# ============================================
 # SSL Certificate Setup with Let's Encrypt
 # ============================================
 try {

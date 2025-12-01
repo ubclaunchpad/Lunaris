@@ -43,11 +43,46 @@
                 }
             },
             "ResultPath": "$.deployResult",
-            "Next": "UpdateRunningStreams",
+            "Next": "WaitForInstanceReady",
             "Catch": [
                 {
                     "ErrorEquals": ["States.TaskFailed"],
                     "Next": "HandleFailedDeployment"
+                }
+            ]
+        },
+        "WaitForInstanceReady": {
+            "Type": "Wait",
+            "Seconds": 60,
+            "Comment": "Wait for EC2 instance to be fully ready for SSM commands",
+            "Next": "ConfigureDcvInstance"
+        },
+        "ConfigureDcvInstance": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "Parameters": {
+                "FunctionName": "${ConfigureDcvInstanceArn}",
+                "Payload": {
+                    "instanceId.$": "$.deployResult.Payload.instanceId",
+                    "dcvIp.$": "$.deployResult.Payload.dcvIp",
+                    "dcvPassword.$": "$.deployResult.Payload.dcvPassword"
+                }
+            },
+            "ResultPath": "$.configureResult",
+            "Next": "UpdateRunningStreams",
+            "Retry": [
+                {
+                    "ErrorEquals": ["States.TaskFailed"],
+                    "IntervalSeconds": 30,
+                    "MaxAttempts": 3,
+                    "BackoffRate": 2
+                }
+            ],
+            "Catch": [
+                {
+                    "ErrorEquals": ["States.ALL"],
+                    "ResultPath": "$.configureError",
+                    "Next": "UpdateRunningStreams"
                 }
             ]
         },

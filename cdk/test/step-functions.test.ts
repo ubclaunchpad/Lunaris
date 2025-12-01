@@ -31,6 +31,11 @@ describe("StepFunctions Construct", () => {
                 handler: "index.handler",
                 code: Code.fromInline("exports.handler = async () => ({ statusCode: 200 });"),
             }),
+            configureDcvInstanceFunction: new Function(stack, "ConfigureDcvInstanceFunction", {
+                runtime: Runtime.NODEJS_18_X,
+                handler: "index.handler",
+                code: Code.fromInline("exports.handler = async () => ({ statusCode: 200 });"),
+            }),
             updateRunningStreamsFunction: new Function(stack, "UpdateRunningStreamsFunction", {
                 runtime: Runtime.NODEJS_18_X,
                 handler: "index.handler",
