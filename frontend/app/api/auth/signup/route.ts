@@ -5,7 +5,7 @@ import {
 } from "@aws-sdk/client-cognito-identity-provider";
 
 export async function POST(req: Request) {
-    const { email, password } = await req.json();
+    const { username, email, password } = await req.json();   // <-- accept username + email
 
     try {
         const client = new CognitoIdentityProviderClient({
@@ -13,9 +13,11 @@ export async function POST(req: Request) {
         });
 
         const command = new SignUpCommand({
-            ClientId: process.env.COGNITO_CLIENT_ID!,
-            Username: email,
+            ClientId: process.env.COGNITO_CLIENT_ID!,  // your client ID
+            Username: username,                        // <-- username is NOT email
             Password: password,
+
+            // Email must always be provided because your pool requires it
             UserAttributes: [
                 {
                     Name: "email",
@@ -27,8 +29,15 @@ export async function POST(req: Request) {
         const response = await client.send(command);
 
         return NextResponse.json({ success: true, response });
+
     } catch (err: unknown) {
         console.error("Signup error:", err);
-        return NextResponse.json({ success: false, message: err.message }, { status: 400 });
+
+        const message = err instanceof Error ? err.message : "Unknown error";
+
+        return NextResponse.json(
+            { success: false, message },
+            { status: 400 }
+        );
     }
 }

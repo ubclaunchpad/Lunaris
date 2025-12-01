@@ -17,7 +17,7 @@ export class CognitoUserPool extends Construct {
             selfSignUpEnabled: true,
             signInAliases: {
                 email: true,
-                username: true,
+                username: false,
             },
             autoVerify: {
                 email: true,

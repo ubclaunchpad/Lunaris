@@ -5,7 +5,7 @@ import {
 } from "@aws-sdk/client-cognito-identity-provider";
 
 export async function POST(req: Request) {
-    const { email, password } = await req.json();
+    const { username, password } = await req.json();   // <-- important change
 
     try {
         const client = new CognitoIdentityProviderClient({
@@ -16,7 +16,7 @@ export async function POST(req: Request) {
             AuthFlow: "USER_PASSWORD_AUTH",
             ClientId: process.env.COGNITO_CLIENT_ID!,
             AuthParameters: {
-                USERNAME: email,
+                USERNAME: username,    // <-- MUST use username, NOT email
                 PASSWORD: password,
             },
         });
@@ -30,8 +30,17 @@ export async function POST(req: Request) {
             accessToken: result?.AccessToken,
             refreshToken: result?.RefreshToken,
         });
+
     } catch (err: unknown) {
-        console.error("Cognito error:", err);
-        return NextResponse.json({ success: false, message: err.message }, { status: 400 });
+
+        const message =
+            err instanceof Error
+                ? err.message
+                : "Unknown error";
+
+        return NextResponse.json(
+            { success: false, message },
+            { status: 400 }
+        );
     }
 }
