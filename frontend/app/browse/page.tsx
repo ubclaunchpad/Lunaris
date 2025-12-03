@@ -4,12 +4,10 @@ import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { GradientBackground } from "@/components/gradient-background";
 
 export default function BrowsePage() {
     return (
         <>
-            <GradientBackground />
             <div className="relative z-0 min-h-screen">
                 {/* Header */}
                 <Dashboard />
