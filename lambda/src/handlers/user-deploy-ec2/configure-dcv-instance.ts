@@ -54,9 +54,9 @@ async function waitForCommand(
             }
             // Still in progress, wait and retry
             await new Promise((resolve) => setTimeout(resolve, pollInterval));
-        } catch (err: any) {
+        } catch (err: unknown) {
             // InvocationDoesNotExist means the command hasn't started yet
-            if (err.name === "InvocationDoesNotExist") {
+            if (err instanceof Error && err.name === "InvocationDoesNotExist") {
                 await new Promise((resolve) => setTimeout(resolve, pollInterval));
                 continue;
             }
@@ -191,13 +191,13 @@ export const handler = async (event: ConfigureDcvEvent): Promise<ConfigureDcvRes
             sslConfigured,
             message: `Password: ${passwordSet ? "OK" : "FAILED"}, SSL: ${sslConfigured ? "OK" : "FAILED"}`,
         };
-    } catch (err: any) {
+    } catch (err: unknown) {
         console.error("Configuration error:", err);
         return {
             success: false,
             passwordSet,
             sslConfigured,
-            message: err.message || "Unknown error",
+            message: err instanceof Error ? err.message : "Unknown error",
         };
     }
 };

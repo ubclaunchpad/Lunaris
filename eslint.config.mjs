@@ -25,6 +25,8 @@ export default defineConfig([
         "**/test/**",
         "**/*.config.js",
         "**/cdk.out/**",
+        "frontend/public/dcv/**",
+        "frontend/.next/**",
     ]),
     eslintConfigPrettier,
     {
@@ -40,11 +42,12 @@ export default defineConfig([
         ...config,
         basePath: "frontend",
         files: ["**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"],
+        ignores: [".next/**", "next-env.d.ts", "public/dcv/**"],
     })),
     {
         basePath: "frontend",
         files: ["**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"],
-        ignores: [".next/**", "next-env.d.ts"],
+        ignores: [".next/**", "next-env.d.ts", "public/dcv/**"],
         settings: {
             next: {
                 rootDir: "frontend",
@@ -57,6 +60,17 @@ export default defineConfig([
                     jsx: true,
                 },
             },
+        },
+        rules: {
+            "react/no-unescaped-entities": "off",
+            "@next/next/no-html-link-for-pages": ["error", "frontend/app"],
+        },
+    },
+    {
+        basePath: "frontend",
+        files: ["next-env.d.ts"],
+        rules: {
+            "@typescript-eslint/triple-slash-reference": "off",
         },
     },
     // CDK config

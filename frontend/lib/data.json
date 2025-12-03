@@ -1,0 +1,49 @@
+{
+    "games": [
+        {
+            "id": "cyberpunk",
+            "name": "Cyberpunk",
+            "description": "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Morbi non cursus urna. Morbi vehicula posuere nisi placerat blandit. Vivamus tincidunt accumsan dictum. Praesent vestibulum arcu id eros faucibus sagittis. Etiam eget tristique arcu. Curabitur lacinia metus eu orci tempus lacinia. Praesent commodo tellus id dictum tristique. Curabitur vel tincidunt neque. Suspendisse varius molestie ornare. Nam vel feugiat quam. Duis id augue facilisis, accumsan felis sit amet, suscipit purus. Mauris eleifend feugiat orci, vitae congue purus posuere et. ",
+            "image": "/images/games/cyberpunk.png",
+            "modes": ["Single Player", "RPG"],
+            "tags": ["Action", "RPG"],
+            "playable": false
+        },
+        {
+            "id": "ghost-of-tsushima",
+            "name": "Ghost of Tsushima",
+            "description": "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Morbi non cursus urna. Morbi vehicula posuere nisi placerat blandit. Vivamus tincidunt accumsan dictum. Praesent vestibulum arcu id eros faucibus sagittis. Etiam eget tristique arcu. Curabitur lacinia metus eu orci tempus lacinia. Praesent commodo tellus id dictum tristique. Curabitur vel tincidunt neque. Suspendisse varius molestie ornare. Nam vel feugiat quam. Duis id augue facilisis, accumsan felis sit amet, suscipit purus. Mauris eleifend feugiat orci, vitae congue purus posuere et. ",
+            "image": "/images/games/ghost-of-tsushima.png",
+            "modes": ["Single Player", "Local Multiplayer"],
+            "tags": ["Action", "RPG"],
+            "playable": false
+        },
+        {
+            "id": "hollow-knight",
+            "name": "Hollow Knight",
+            "description": "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Morbi non cursus urna. Morbi vehicula posuere nisi placerat blandit. Vivamus tincidunt accumsan dictum. Praesent vestibulum arcu id eros faucibus sagittis. Etiam eget tristique arcu. Curabitur lacinia metus eu orci tempus lacinia. Praesent commodo tellus id dictum tristique. Curabitur vel tincidunt neque. Suspendisse varius molestie ornare. Nam vel feugiat quam. Duis id augue facilisis, accumsan felis sit amet, suscipit purus. Mauris eleifend feugiat orci, vitae congue purus posuere et. ",
+            "image": "/images/games/hollow-knight.png",
+            "modes": ["Single Player", "Local Multiplayer"],
+            "tags": ["Action", "RPG"],
+            "playable": false
+        },
+        {
+            "id": "it-takes-two",
+            "name": "It Takes Two",
+            "description": "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Morbi non cursus urna. Morbi vehicula posuere nisi placerat blandit. Vivamus tincidunt accumsan dictum. Praesent vestibulum arcu id eros faucibus sagittis. Etiam eget tristique arcu. Curabitur lacinia metus eu orci tempus lacinia. Praesent commodo tellus id dictum tristique. Curabitur vel tincidunt neque. Suspendisse varius molestie ornare. Nam vel feugiat quam. Duis id augue facilisis, accumsan felis sit amet, suscipit purus. Mauris eleifend feugiat orci, vitae congue purus posuere et. ",
+            "image": "/images/games/it-takes-two.png",
+            "modes": ["Single Player", "Local Multiplayer"],
+            "tags": ["Action", "RPG"],
+            "playable": false
+        },
+        {
+            "id": "test",
+            "name": "Streaming Test",
+            "description": "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Morbi non cursus urna. Morbi vehicula posuere nisi placerat blandit. Vivamus tincidunt accumsan dictum. Praesent vestibulum arcu id eros faucibus sagittis. Etiam eget tristique arcu. Curabitur lacinia metus eu orci tempus lacinia. Praesent commodo tellus id dictum tristique. Curabitur vel tincidunt neque. Suspendisse varius molestie ornare. Nam vel feugiat quam. Duis id augue facilisis, accumsan felis sit amet, suscipit purus. Mauris eleifend feugiat orci, vitae congue purus posuere et. ",
+            "image": "/images/games/cyberpunk.png",
+            "modes": ["Single Player", "RPG"],
+            "tags": ["Action", "RPG"],
+            "playable": true
+        }
+    ]
+}
