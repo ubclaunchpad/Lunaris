@@ -14,7 +14,7 @@ interface StreamingPageState {
 
 /**
  * Streaming page that connects to a DCV server
- * 
+ *
  * Expected URL parameters:
  * - serverUrl: The DCV server URL
  * - username: DCV username
@@ -25,7 +25,7 @@ interface StreamingPageState {
 export default function StreamingPage() {
     const router = useRouter();
     const searchParams = useSearchParams();
-    
+
     const [state, setState] = useState<StreamingPageState | null>(null);
     const [logs, setLogs] = useState<string[]>([]);
 
@@ -97,9 +97,7 @@ export default function StreamingPage() {
                     username={state.username}
                     password={state.password}
                     onConnect={() => addLog("✅ Connected to game server!")}
-                    onDisconnect={(reason) =>
-                        addLog(`🔌 Disconnected: ${JSON.stringify(reason)}`)
-                    }
+                    onDisconnect={(reason) => addLog(`🔌 Disconnected: ${JSON.stringify(reason)}`)}
                     onError={(error) => addLog(`❌ Error: ${error?.message || error}`)}
                 />
             </div>

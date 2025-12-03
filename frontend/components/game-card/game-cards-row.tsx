@@ -14,9 +14,7 @@ const Carousel = ({ children, className = "" }: CarouselProps) => (
             role="region"
             aria-label="game cards"
         >
-            <div className="flex gap-5 min-h-[220px] pr-8">
-                {children}
-            </div>
+            <div className="flex gap-5 min-h-[220px] pr-8">{children}</div>
         </div>
     </div>
 );
@@ -24,10 +22,13 @@ const Carousel = ({ children, className = "" }: CarouselProps) => (
 type GamesDataset = typeof gamesData;
 type Game = GamesDataset["games"][number];
 
-const gameMap: Record<string, Game> = gamesData.games.reduce((acc, game) => {
-    acc[game.id] = game;
-    return acc;
-}, {} as Record<string, Game>);
+const gameMap: Record<string, Game> = gamesData.games.reduce(
+    (acc, game) => {
+        acc[game.id] = game;
+        return acc;
+    },
+    {} as Record<string, Game>,
+);
 
 interface GameCardsRowProps {
     gameIds?: string[];

@@ -46,8 +46,10 @@ export function GameCard({ id, src, alt, title, modes, tags }: GameCardProps) {
                     }}
                 >
                     <div className="p-4 space-y-3">
-                        <h3 className="text-white font-space-grotesk font-medium text-base text-left">{title}</h3>
-                        
+                        <h3 className="text-white font-space-grotesk font-medium text-base text-left">
+                            {title}
+                        </h3>
+
                         <div className="flex items-center text-xs text-[#fbfff5] flex-wrap">
                             {modes.map((mode, idx) => (
                                 <span key={idx} className="flex items-center">
@@ -56,7 +58,7 @@ export function GameCard({ id, src, alt, title, modes, tags }: GameCardProps) {
                                 </span>
                             ))}
                         </div>
-                        
+
                         <div className="flex gap-2 flex-wrap">
                             {tags.map((tag, idx) => (
                                 <span
