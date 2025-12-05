@@ -2,8 +2,10 @@ build/
 dist/
 coverage/
 node_modules/
-frontend/.next/
 cdk/cdk.out/
+public/
+frontend/public/dcv/
+frontend/.next/
 
 # Files without parsers
 .prettierignore

@@ -4,6 +4,8 @@ import {
     GetExecutionHistoryCommand,
     SFNClient,
     HistoryEvent,
+    TaskFailedEventDetails,
+    LambdaFunctionFailedEventDetails,
 } from "@aws-sdk/client-sfn";
 import { APIGatewayProxyHandler, APIGatewayProxyResult } from "aws-lambda";
 import DynamoDBWrapper from "../utils/dynamoDbWrapper";
@@ -108,11 +110,12 @@ const getErrorDetails = (
         const event = events[i];
 
         if (event.type === "TaskFailed" || event.type === "LambdaFunctionFailed") {
-            const details = event.lambdaFunctionFailedEventDetails || event.taskFailedEventDetails;
+            const details: TaskFailedEventDetails | LambdaFunctionFailedEventDetails | undefined =
+                event.lambdaFunctionFailedEventDetails || event.taskFailedEventDetails;
             return {
                 errorStep: "Unknown",
-                errorType: (details as any)?.error || "TaskFailed",
-                errorMessage: (details as any)?.cause || "Task execution failed",
+                errorType: details?.error || "TaskFailed",
+                errorMessage: details?.cause || "Task execution failed",
             };
         }
 
@@ -132,13 +135,16 @@ const getErrorDetails = (
             for (let j = i + 1; j < events.length && j < i + 5; j++) {
                 const nextEvent = events[j];
                 if (nextEvent.type === "TaskFailed" || nextEvent.type === "LambdaFunctionFailed") {
-                    const failDetails =
+                    const failDetails:
+                        | TaskFailedEventDetails
+                        | LambdaFunctionFailedEventDetails
+                        | undefined =
                         nextEvent.lambdaFunctionFailedEventDetails ||
                         nextEvent.taskFailedEventDetails;
                     return {
                         errorStep: stateDetails?.name || "Unknown",
-                        errorType: (failDetails as any)?.error || "TaskFailed",
-                        errorMessage: (failDetails as any)?.cause || "Task execution failed",
+                        errorType: failDetails?.error || "TaskFailed",
+                        errorMessage: failDetails?.cause || "Task execution failed",
                     };
                 }
             }

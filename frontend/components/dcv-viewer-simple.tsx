@@ -9,25 +9,70 @@ import React, { useEffect, useRef, useState, useCallback } from "react";
  * Handles authentication and session connection automatically.
  */
 
+interface DCVSession {
+    sessionId?: string;
+    id?: string;
+    authToken?: string;
+    authenticationToken?: string;
+}
+
+interface DCVAuthenticationData {
+    getAuthToken?: () => string;
+    getSessionToken?: () => string;
+}
+
+interface DCVAuthHandler {
+    sendCredentials: (credentials: { username: string; password: string }) => void;
+}
+
+interface DCVConnection {
+    disconnect: () => void;
+}
+
+interface DCVSDK {
+    setLogLevel: (level: number) => void;
+    authenticate: (url: string, options: DCVAuthOptions) => DCVAuthHandler;
+    connect: (options: DCVConnectOptions) => Promise<DCVConnection>;
+}
+
+interface DCVAuthOptions {
+    promptCredentials: () => void;
+    success: (authenticationData: DCVAuthenticationData, sessionList: DCVSession[]) => void;
+    error: (error: Error) => void;
+}
+
+interface DCVConnectOptions {
+    url: string;
+    sessionId: string;
+    authToken: string;
+    divId: string;
+    baseUrl: string;
+    callbacks: {
+        firstFrame: () => void;
+        disconnect: (reason: { message?: string }) => void;
+        error: (error: Error) => void;
+    };
+}
+
 interface DCVViewerSimpleProps {
     serverUrl: string;
     // Credentials for DCV authentication
     username?: string;
     password?: string;
     onConnect?: () => void;
-    onDisconnect?: (reason: any) => void;
-    onError?: (error: any) => void;
+    onDisconnect?: (reason: { message?: string }) => void;
+    onError?: (error: Error) => void;
 }
 
 declare global {
     interface Window {
-        dcv?: any;
+        dcv?: DCVSDK;
     }
 }
 
-let sdkLoadPromise: Promise<any> | null = null;
+let sdkLoadPromise: Promise<DCVSDK> | null = null;
 
-async function loadDCVSDK(): Promise<any> {
+async function loadDCVSDK(): Promise<DCVSDK> {
     if (window.dcv) {
         return window.dcv;
     }
@@ -82,9 +127,9 @@ export function DCVViewerSimple({
 
     const containerRef = useRef<HTMLDivElement>(null);
     const dcvWrapperRef = useRef<HTMLDivElement>(null);
-    const dcvRef = useRef<any>(null);
-    const authHandlerRef = useRef<any>(null);
-    const connectionRef = useRef<any>(null);
+    const dcvRef = useRef<DCVSDK | null>(null);
+    const authHandlerRef = useRef<DCVAuthHandler | null>(null);
+    const connectionRef = useRef<DCVConnection | null>(null);
     const authStartedRef = useRef(false); // Prevent multiple auth attempts
     const mountedRef = useRef(true); // Track if component is mounted
     const currentZoomRef = useRef<number>(1); // Track current zoom level
@@ -229,7 +274,7 @@ export function DCVViewerSimple({
                 }
             },
 
-            success: (authenticationData: any, sessionList: any) => {
+            success: (authenticationData: DCVAuthenticationData, sessionList: DCVSession[]) => {
                 if (!mountedRef.current) return;
                 setNeedsCredentials(false);
 
@@ -245,9 +290,9 @@ export function DCVViewerSimple({
 
                 // Fallback: check if authHandler has methods to get the token
                 if (!sessionToken && authenticationData) {
-                    if (typeof authenticationData.getAuthToken === "function") {
+                    if (authenticationData.getAuthToken) {
                         sessionToken = authenticationData.getAuthToken();
-                    } else if (typeof authenticationData.getSessionToken === "function") {
+                    } else if (authenticationData.getSessionToken) {
                         sessionToken = authenticationData.getSessionToken();
                     }
                 }
@@ -261,7 +306,7 @@ export function DCVViewerSimple({
                 }, 100);
             },
 
-            error: (authError: any) => {
+            error: (authError: Error) => {
                 if (!mountedRef.current) return;
                 console.error("DCV authentication error:", authError);
 
@@ -290,7 +335,7 @@ export function DCVViewerSimple({
     }, [status, serverUrl]);
 
     const connectToSession = useCallback(
-        (dcv: any, sessionId: string, token: string) => {
+        (dcv: DCVSDK, sessionId: string, token: string) => {
             if (!dcvWrapperRef.current) {
                 setError("Container not ready");
                 setStatus("error");
@@ -311,12 +356,12 @@ export function DCVViewerSimple({
                         setStatus("connected");
                         onConnect?.();
                     },
-                    disconnect: (reason: any) => {
+                    disconnect: (reason: { message?: string }) => {
                         setStatus("error");
                         setError(`Disconnected: ${reason?.message || JSON.stringify(reason)}`);
                         onDisconnect?.(reason);
                     },
-                    error: (err: any) => {
+                    error: (err: Error) => {
                         console.error("DCV connection error:", err);
                         setError(`Connection error: ${err?.message || JSON.stringify(err)}`);
                         setStatus("error");
@@ -324,10 +369,10 @@ export function DCVViewerSimple({
                     },
                 },
             })
-                .then((connection: any) => {
+                .then((connection: DCVConnection) => {
                     connectionRef.current = connection;
                 })
-                .catch((err: any) => {
+                .catch((err: Error) => {
                     console.error("DCV connect failed:", err);
                     setError(`Connect failed: ${err?.message || err}`);
                     setStatus("error");
