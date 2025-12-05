@@ -81,16 +81,108 @@ export function DCVViewerSimple({
     const [needsCredentials, setNeedsCredentials] = useState(false);
 
     const containerRef = useRef<HTMLDivElement>(null);
+    const dcvWrapperRef = useRef<HTMLDivElement>(null);
     const dcvRef = useRef<any>(null);
     const authHandlerRef = useRef<any>(null);
     const connectionRef = useRef<any>(null);
     const authStartedRef = useRef(false); // Prevent multiple auth attempts
     const mountedRef = useRef(true); // Track if component is mounted
+    const currentZoomRef = useRef<number>(1); // Track current zoom level
 
     // Sync credentials when props change
     useEffect(() => {
         setCredentials({ username, password });
     }, [username, password]);
+
+    // Handle window resize - calculate and apply zoom factor
+    useEffect(() => {
+        const calculateAndApplyZoom = () => {
+            if (!containerRef.current || !dcvWrapperRef.current) return;
+
+            // Get the canvas that DCV creates
+            const canvas = dcvWrapperRef.current.querySelector("canvas");
+            if (!canvas) return;
+
+            const containerWidth = containerRef.current.clientWidth;
+            const containerHeight = containerRef.current.clientHeight;
+            const canvasWidth = canvas.width || 1280;
+            const canvasHeight = canvas.height || 720;
+
+            // Calculate zoom to fit while maintaining aspect ratio
+            const scaleX = containerWidth / canvasWidth;
+            const scaleY = containerHeight / canvasHeight;
+            const zoom = Math.min(scaleX, scaleY, 1); // Don't zoom in past 100%
+
+            // Store zoom for mouse event adjustment
+            currentZoomRef.current = zoom;
+
+            // Apply CSS transform scale
+            dcvWrapperRef.current.style.transform = `scale(${zoom})`;
+            dcvWrapperRef.current.style.transformOrigin = "top left";
+        };
+
+        // Run on resize
+        window.addEventListener("resize", calculateAndApplyZoom);
+
+        // Also run periodically until canvas is found
+        const interval = setInterval(() => {
+            if (dcvWrapperRef.current?.querySelector("canvas")) {
+                calculateAndApplyZoom();
+            }
+        }, 200);
+
+        // Stop checking after 10 seconds
+        const timeout = setTimeout(() => clearInterval(interval), 10000);
+
+        return () => {
+            window.removeEventListener("resize", calculateAndApplyZoom);
+            clearInterval(interval);
+            clearTimeout(timeout);
+        };
+    }, [status]);
+
+    // Intercept mouse events to adjust coordinates for scaling
+    useEffect(() => {
+        if (!dcvWrapperRef.current) return;
+
+        const wrapper = dcvWrapperRef.current;
+
+        // Create adjusted mouse event
+        const adjustMouseEvent = (e: MouseEvent): void => {
+            const zoom = currentZoomRef.current;
+            if (zoom === 1) return; // No adjustment needed
+
+            // Get the canvas
+            const canvas = wrapper.querySelector("canvas");
+            if (!canvas) return;
+
+            // Calculate the adjusted coordinates
+            const rect = wrapper.getBoundingClientRect();
+            const x = (e.clientX - rect.left) / zoom;
+            const y = (e.clientY - rect.top) / zoom;
+
+            // Override the offset properties used by DCV SDK
+            Object.defineProperty(e, "offsetX", { value: x, writable: false });
+            Object.defineProperty(e, "offsetY", { value: y, writable: false });
+        };
+
+        // Capture phase to adjust before DCV SDK sees the event
+        const handleMouseEvent = (e: MouseEvent) => {
+            adjustMouseEvent(e);
+        };
+
+        wrapper.addEventListener("mousedown", handleMouseEvent, true);
+        wrapper.addEventListener("mouseup", handleMouseEvent, true);
+        wrapper.addEventListener("mousemove", handleMouseEvent, true);
+        wrapper.addEventListener("click", handleMouseEvent, true);
+
+        return () => {
+            wrapper.removeEventListener("mousedown", handleMouseEvent, true);
+            wrapper.removeEventListener("mouseup", handleMouseEvent, true);
+            wrapper.removeEventListener("mousemove", handleMouseEvent, true);
+            wrapper.removeEventListener("click", handleMouseEvent, true);
+        };
+    }, [status]);
 
     // Load SDK on mount
     useEffect(() => {
@@ -199,7 +291,7 @@ export function DCVViewerSimple({
 
     const connectToSession = useCallback(
         (dcv: any, sessionId: string, token: string) => {
-            if (!containerRef.current) {
+            if (!dcvWrapperRef.current) {
                 setError("Container not ready");
                 setStatus("error");
                 return;
@@ -212,7 +304,7 @@ export function DCVViewerSimple({
                 url: serverUrl,
                 sessionId: sessionId,
                 authToken: token,
-                divId: containerRef.current.id,
+                divId: dcvWrapperRef.current.id,
                 baseUrl: sdkBaseUrl,
                 callbacks: {
                     firstFrame: () => {
@@ -314,7 +406,10 @@ export function DCVViewerSimple({
     }
 
     return (
-        <div className="relative w-full h-full bg-gray-900">
+        <div
+            ref={containerRef}
+            className="relative w-full h-full bg-gray-900 overflow-hidden dcv-container"
+        >
             {(status === "authenticating" || status === "ready-to-connect") && (
                 <div className="absolute inset-0 flex items-center justify-center text-white z-10">
                     {status === "authenticating"
@@ -322,7 +417,19 @@ export function DCVViewerSimple({
                         : "Connecting to DCV session..."}
                 </div>
             )}
-            <div ref={containerRef} id="dcv-display" className="w-full h-full" />
+            <div ref={dcvWrapperRef} id="dcv-display" className="dcv-display-wrapper" />
+            {/* CSS - container for zoom calculation */}
+            <style>{`
+                .dcv-container {
+                    position: relative;
+                    width: 100%;
+                    height: 100%;
+                    overflow: hidden;
+                }
+                .dcv-display-wrapper {
+                    transform-origin: top left;
+                }
+            `}</style>
         </div>
     );
 }

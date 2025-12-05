@@ -406,7 +406,7 @@ export default function StreamingTestPage() {
 
     if (showViewer) {
         return (
-            <div className="flex flex-col h-screen pt-[88px]">
+            <div className="flex flex-col h-screen pt-[88px] overflow-hidden">
                 {/* Header */}
                 <div className="bg-gray-800 text-white p-2 flex items-center justify-between shrink-0">
                     <span className="font-medium">DCV Viewer - {serverUrl}</span>
@@ -419,7 +419,7 @@ export default function StreamingTestPage() {
                 </div>
 
                 {/* Viewer */}
-                <div className="flex-1 min-h-0">
+                <div className="flex-1 min-h-0 overflow-hidden relative">
                     <DCVViewerSimple
                         serverUrl={serverUrl}
                         username={username}
