@@ -406,7 +406,7 @@ export default function StreamingTestPage() {
 
     if (showViewer) {
         return (
-            <div className="flex flex-col h-screen pt-[88px]">
+            <div className="fixed inset-0 flex flex-col pt-[88px] overflow-hidden z-10">
                 {/* Header */}
                 <div className="bg-gray-800 text-white p-2 flex items-center justify-between shrink-0">
                     <span className="font-medium">DCV Viewer - {serverUrl}</span>
@@ -419,7 +419,7 @@ export default function StreamingTestPage() {
                 </div>
 
                 {/* Viewer */}
-                <div className="flex-1 min-h-0">
+                <div className="flex-1 min-h-0 overflow-hidden relative">
                     <DCVViewerSimple
                         serverUrl={serverUrl}
                         username={username}
@@ -443,7 +443,7 @@ export default function StreamingTestPage() {
     }
 
     return (
-        <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center p-4 pt-[100px]">
+        <div className="fixed inset-0 bg-gray-900 text-white flex items-center justify-center p-4 pt-[88px] z-10">
             <div className="w-full max-w-md space-y-6">
                 <div className="text-center">
                     <h1 className="text-2xl font-bold mb-2">🖥️ Lunaris Cloud Gaming</h1>
@@ -488,15 +488,18 @@ export default function StreamingTestPage() {
                         <button
                             onClick={terminateInstance}
                             disabled={
-                                terminating || isTerminatePolling || !userId || !currentInstanceId
+                                terminating ||
+                                isTerminatePolling ||
+                                !userId ||
+                                !currentInstanceId ||
+                                deploying ||
+                                isPolling
                             }
                             className="flex-1 py-2 bg-red-600 rounded font-medium hover:bg-red-700 transition-colors disabled:opacity-50"
                         >
-                            {isTerminatePolling
+                            {isTerminatePolling || terminating
                                 ? "🔄 Terminating..."
-                                : terminating
-                                  ? "Starting..."
-                                  : "🛑 Terminate"}
+                                : "🛑 Terminate"}
                         </button>
                     </div>
 
