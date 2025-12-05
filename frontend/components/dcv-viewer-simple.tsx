@@ -161,9 +161,15 @@ export function DCVViewerSimple({
             // Store zoom for mouse event adjustment
             currentZoomRef.current = zoom;
 
-            // Apply CSS transform scale
-            dcvWrapperRef.current.style.transform = `scale(${zoom})`;
+            // Compute offsets to center the scaled canvas within the container
+            const scaledCanvasWidth = canvasWidth * zoom;
+            const scaledCanvasHeight = canvasHeight * zoom;
+            const left = Math.max((containerWidth - scaledCanvasWidth) / 2, 0);
+            const top = Math.max((containerHeight - scaledCanvasHeight) / 2, 0);
+
+            // Apply CSS transform: translate then scale so the canvas is centered
             dcvWrapperRef.current.style.transformOrigin = "top left";
+            dcvWrapperRef.current.style.transform = `translate(${left}px, ${top}px) scale(${zoom})`;
         };
 
         // Run on resize
@@ -269,7 +275,7 @@ export function DCVViewerSimple({
                 setNeedsCredentials(true);
 
                 // If we have credentials, send them automatically
-                if (credentials.username && credentials.password) {
+                if (credentials.username && credentials.password && authHandlerRef.current) {
                     authHandlerRef.current.sendCredentials(credentials);
                 }
             },
